@@ -1,6 +1,6 @@
 {
   "name": "@tks/wayfinder",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Travel search for your terminal and your AI agents",
   "repository": {
     "type": "git",
