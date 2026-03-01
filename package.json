@@ -1,0 +1,26 @@
+{
+  "name": "@tksohishi/wayfinder",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "wayfinder": "./bin/wayfinder"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "package.json"
+  ],
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "wayfinder": "bun run src/cli.ts",
+    "test": "bun test"
+  }
+}
