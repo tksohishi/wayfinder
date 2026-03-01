@@ -5,10 +5,9 @@
   "private": false,
   "type": "module",
   "bin": {
-    "wayfinder": "./bin/wayfinder"
+    "wayfinder": "./src/cli.ts"
   },
   "files": [
-    "bin",
     "src",
     "README.md",
     "package.json"
