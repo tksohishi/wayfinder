@@ -1,5 +1,5 @@
 import { CliError } from "./errors";
-import { ExitCode, FlightQuery, HotelQuery, ParsedArgs } from "./types";
+import { ExitCode, FlightBookingQuery, FlightQuery, HotelQuery, ParsedArgs } from "./types";
 
 interface FlightRawOptions {
   from?: string;
@@ -26,7 +26,16 @@ interface HotelRawOptions {
   help: boolean;
 }
 
-type SearchMode = "flights" | "hotels";
+interface FlightBookingRawOptions {
+  from?: string;
+  to?: string;
+  date?: string;
+  tokens: string[];
+  outputJson: boolean;
+  help: boolean;
+}
+
+type SearchMode = "flights" | "hotels" | "flight-booking";
 
 const HELP_FLAGS = new Set(["-h", "--help"]);
 
@@ -42,6 +51,10 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
 
   if (mode === "hotels") {
     return parseHotelsArgs(args);
+  }
+
+  if (mode === "flight-booking") {
+    return parseFlightBookingArgs(args);
   }
 
   return parseFlightsArgs(args);
@@ -197,6 +210,73 @@ function parseHotelsArgs(args: string[]): ParsedArgs {
   };
 }
 
+function parseFlightBookingArgs(args: string[]): ParsedArgs {
+  const raw: FlightBookingRawOptions = {
+    tokens: [],
+    outputJson: false,
+    help: false,
+  };
+
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+
+    if (HELP_FLAGS.has(token)) {
+      raw.help = true;
+      continue;
+    }
+
+    if (token === "--json") {
+      raw.outputJson = true;
+      continue;
+    }
+
+    if (token === "--token") {
+      const value = args[i + 1];
+      if (!value || value.startsWith("--")) {
+        throw new CliError("Missing value for --token", ExitCode.InvalidInput);
+      }
+      raw.tokens.push(value.trim());
+      i += 1;
+      continue;
+    }
+
+    const value = args[i + 1];
+    if (!value || value.startsWith("--")) {
+      throw new CliError(`Missing value for ${token}`, ExitCode.InvalidInput);
+    }
+
+    switch (token) {
+      case "--from":
+        raw.from = value;
+        break;
+      case "--to":
+        raw.to = value;
+        break;
+      case "--date":
+        raw.date = value;
+        break;
+      default:
+        throw new CliError(`Unknown flag: ${token}`, ExitCode.InvalidInput);
+    }
+
+    i += 1;
+  }
+
+  if (raw.help) {
+    return {
+      help: true,
+      outputJson: raw.outputJson,
+    };
+  }
+
+  return {
+    help: false,
+    mode: "flight-booking",
+    outputJson: raw.outputJson,
+    query: buildFlightBookingQuery(raw),
+  };
+}
+
 function buildFlightQuery(raw: FlightRawOptions): FlightQuery {
   if (!raw.from || !raw.to || !raw.date) {
     throw new CliError("Missing required flags: --from, --to, --date", ExitCode.InvalidInput);
@@ -284,6 +364,31 @@ function buildHotelQuery(raw: HotelRawOptions): HotelQuery {
   };
 }
 
+function buildFlightBookingQuery(raw: FlightBookingRawOptions): FlightBookingQuery {
+  if (!raw.from || !raw.to || !raw.date) {
+    throw new CliError("Missing required flags: --from, --to, --date", ExitCode.InvalidInput);
+  }
+
+  const origin = normalizeAirport(raw.from, "origin");
+  const destination = normalizeAirport(raw.to, "destination");
+  if (origin === destination) {
+    throw new CliError("Origin and destination must be different airports", ExitCode.InvalidInput);
+  }
+
+  const departureDate = normalizeDate(raw.date, "departure");
+  const tokens = raw.tokens.filter((token) => token.length > 0);
+  if (tokens.length === 0) {
+    throw new CliError("Missing required flag: --token", ExitCode.InvalidInput);
+  }
+
+  return {
+    origin,
+    destination,
+    departureDate,
+    tokens,
+  };
+}
+
 function stripSubcommands(argv: string[]): { mode: SearchMode; args: string[] } {
   const args = [...argv];
   if (args[0] === "hotels") {
@@ -293,6 +398,11 @@ function stripSubcommands(argv: string[]): { mode: SearchMode; args: string[] } 
 
   if (args[0] === "flights") {
     args.shift();
+    if (args[0] === "booking") {
+      args.shift();
+      return { mode: "flight-booking", args };
+    }
+
     if (args[0] === "one-way") {
       args.shift();
     }

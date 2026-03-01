@@ -59,6 +59,12 @@ Structured output for scripting:
 wayfinder flights --from SFO --to JFK --date 2026-04-10 --json | jq '.results[] | {price,airline,stops}'
 ```
 
+Get booking links from selected flight tokens:
+
+```bash
+wayfinder flights booking --from LAS --to JFK --date 2026-05-29 --token "<TOKEN_1>" --token "<TOKEN_2>" --json
+```
+
 Search hotels:
 
 ```bash

@@ -86,6 +86,34 @@ describe("parseCliArgs", () => {
     });
   });
 
+  test("parses flights booking with multiple tokens", () => {
+    const parsed = parseCliArgs([
+      "flights",
+      "booking",
+      "--from",
+      "LAS",
+      "--to",
+      "JFK",
+      "--date",
+      "2099-05-29",
+      "--token",
+      "abc",
+      "--token",
+      "def",
+      "--json",
+    ]);
+
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("flight-booking");
+    expect(parsed.outputJson).toBeTrue();
+    expect(parsed.query).toEqual({
+      origin: "LAS",
+      destination: "JFK",
+      departureDate: "2099-05-29",
+      tokens: ["abc", "def"],
+    });
+  });
+
   test("rejects invalid airport code", () => {
     expect(() =>
       parseCliArgs(["flights", "--from", "SF", "--to", "JFK", "--date", "2099-03-20"]),
@@ -142,5 +170,11 @@ describe("parseCliArgs", () => {
         "2099-03-20",
       ]),
     ).toThrow("Check-out date must be after check-in date");
+  });
+
+  test("requires token for flights booking", () => {
+    expect(() => parseCliArgs(["flights", "booking"])).toThrow(
+      "Missing required flags: --from, --to, --date",
+    );
   });
 });

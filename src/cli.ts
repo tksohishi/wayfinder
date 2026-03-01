@@ -2,7 +2,7 @@ import { resolveApiKey } from "./config";
 import { CliError } from "./errors";
 import { renderFlightTable, renderHotelTable } from "./format";
 import { parseCliArgs } from "./parse";
-import { searchFlights, searchHotels } from "./serpapi";
+import { searchFlightBookingOptions, searchFlights, searchHotels } from "./serpapi";
 import { ExitCode } from "./types";
 
 interface Output {
@@ -22,6 +22,7 @@ const HELP_TEXT = `wayfinder v0.2.0 travel search
 Usage:
   wayfinder flights --from SFO --to JFK --date 2026-03-21 [filters]
   wayfinder flights one-way --from SFO --to JFK --date 2026-03-21 [filters]
+  wayfinder flights booking --from SFO --to JFK --date 2026-03-21 --token <BOOKING_TOKEN> [--token <BOOKING_TOKEN>] [--json]
   wayfinder hotels --where "New York, NY" --check-in 2026-03-21 --check-out 2026-03-23 [filters]
 
 Flights required:
@@ -36,6 +37,13 @@ Flights optional filters:
   --depart-after <HH:MM>    Start of departure window
   --depart-before <HH:MM>   End of departure window
   --exclude-basic           Exclude basic economy fares
+
+Flights booking required:
+  --from <IATA>             Origin airport code
+  --to <IATA>               Destination airport code
+  --date <YYYY-MM-DD>       Departure date
+  --token <BOOKING_TOKEN>   Booking token from a flights search result
+  (repeat --token to request multiple options)
 
 Hotels required:
   --where <QUERY>           Destination or hotel search query
@@ -71,7 +79,7 @@ export async function runWayfinder(
     if (parsed.mode === "flights") {
       const flights = await searchFlights(parsed.query, apiKey, options.fetchImpl ?? fetch);
 
-      if (flights.length === 0) {
+      if (flights.options.length === 0) {
         throw new CliError("No flights found for the selected query", ExitCode.NoResults);
       }
 
@@ -80,14 +88,50 @@ export async function runWayfinder(
           JSON.stringify(
             {
               query: parsed.query,
-              results: flights,
+              googleFlightsUrl: flights.googleFlightsUrl,
+              results: flights.options,
             },
             null,
             2,
           ),
         );
       } else {
-        output.stdout(renderFlightTable(flights));
+        output.stdout(renderFlightTable(flights.options));
+      }
+    } else if (parsed.mode === "flight-booking") {
+      const bookingResults = await searchFlightBookingOptions(
+        parsed.query,
+        apiKey,
+        options.fetchImpl ?? fetch,
+      );
+
+      const flightLinks = bookingResults
+        .filter((result) => typeof result.googleFlightsUrl === "string")
+        .map((result) => ({
+          token: result.token,
+          googleFlightsUrl: result.googleFlightsUrl as string,
+        }));
+
+      if (flightLinks.length === 0) {
+        throw new CliError(
+          "No Google Flights links found for the provided token(s)",
+          ExitCode.NoResults,
+        );
+      }
+
+      if (parsed.outputJson) {
+        output.stdout(
+          JSON.stringify(
+            {
+              query: parsed.query,
+              results: flightLinks,
+            },
+            null,
+            2,
+          ),
+        );
+      } else {
+        output.stdout(renderFlightBookingText(flightLinks));
       }
     } else {
       const hotels = await searchHotels(parsed.query, apiKey, options.fetchImpl ?? fetch);
@@ -127,4 +171,18 @@ export async function runWayfinder(
 if (import.meta.main) {
   const code = await runWayfinder(process.argv.slice(2));
   process.exitCode = code;
+}
+
+function renderFlightBookingText(
+  results: Array<{ token: string; googleFlightsUrl: string }>,
+): string {
+  const lines: string[] = [];
+
+  for (const result of results) {
+    lines.push(`TOKEN: ${result.token}`);
+    lines.push(`GOOGLE FLIGHTS: ${result.googleFlightsUrl}`);
+    lines.push("");
+  }
+
+  return lines.join("\n").trimEnd();
 }

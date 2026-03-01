@@ -15,3 +15,8 @@ Travel search for your terminal and your AI agents. Outputs results as a formatt
 ## Architecture
 
 Entrypoint is `bin/wayfinder` which calls `src/cli.ts`. The CLI parses args, resolves the API key, calls SerpApi, and renders output. `cli.ts` accepts dependency injection (`fetchImpl`, `output`, `env`) so tests run without network or filesystem access.
+
+## API Documentation
+
+- Flights: https://serpapi.com/google-flights-api
+- Hotels: https://serpapi.com/google-hotels-api

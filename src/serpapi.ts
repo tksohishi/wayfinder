@@ -1,5 +1,14 @@
 import { CliError } from "./errors";
-import { ExitCode, FlightOption, FlightQuery, HotelOption, HotelQuery } from "./types";
+import {
+  ExitCode,
+  FlightBookingQuery,
+  FlightBookingResult,
+  FlightOption,
+  FlightQuery,
+  FlightSearchResult,
+  HotelOption,
+  HotelQuery,
+} from "./types";
 
 interface SerpApiAirport {
   time?: string;
@@ -16,12 +25,36 @@ interface SerpApiItinerary {
   price?: number;
   total_duration?: number;
   flights?: SerpApiSegment[];
+  booking_token?: string;
 }
 
 interface SerpApiFlightsResponse {
   error?: string;
+  search_metadata?: {
+    google_flights_url?: string;
+  };
   best_flights?: SerpApiItinerary[];
   other_flights?: SerpApiItinerary[];
+}
+
+interface SerpApiBookingRequest {
+  url?: string;
+  post_data?: string;
+}
+
+interface SerpApiBookingNode {
+  source?: string;
+  price?: number;
+  booking_request?: SerpApiBookingRequest;
+  [key: string]: unknown;
+}
+
+interface SerpApiBookingOptionsResponse {
+  error?: string;
+  search_metadata?: {
+    google_flights_url?: string;
+  };
+  [key: string]: unknown;
 }
 
 interface SerpApiPrice {
@@ -51,7 +84,7 @@ export async function searchFlights(
   query: FlightQuery,
   apiKey: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<FlightOption[]> {
+): Promise<FlightSearchResult> {
   const payload = await fetchSerpApiJson<SerpApiFlightsResponse>(
     buildFlightRequestUrl(query, apiKey),
     fetchImpl,
@@ -74,8 +107,36 @@ export async function searchFlights(
     );
   }
 
-  flights.sort((a, b) => a.price - b.price);
-  return flights;
+  flights.sort(compareByDepartureTime);
+  return {
+    options: flights,
+    googleFlightsUrl: payload.search_metadata?.google_flights_url,
+  };
+}
+
+export async function searchFlightBookingOptions(
+  query: FlightBookingQuery,
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<FlightBookingResult[]> {
+  const requests = query.tokens.map(async (token) => {
+    const payload = await fetchSerpApiJson<SerpApiBookingOptionsResponse>(
+      buildFlightBookingOptionsRequestUrl(query, token, apiKey),
+      fetchImpl,
+    );
+
+    if (typeof payload.error === "string" && payload.error.trim() !== "") {
+      throw new CliError(`SerpApi error: ${payload.error}`, ExitCode.ApiFailure);
+    }
+
+    return {
+      token,
+      googleFlightsUrl: payload.search_metadata?.google_flights_url,
+      links: extractBookingLinks(payload),
+    };
+  });
+
+  return Promise.all(requests);
 }
 
 export async function searchHotels(
@@ -148,7 +209,7 @@ function shapeItinerary(itinerary: SerpApiItinerary): FlightOption | null {
 
   const uniqueAirlines = [...new Set(segments.map((segment) => segment.airline).filter(Boolean))];
 
-  return {
+  const option: FlightOption = {
     price: itinerary.price as number,
     airline: uniqueAirlines.length > 0 ? uniqueAirlines.join(", ") : "Unknown",
     departureTime,
@@ -156,6 +217,12 @@ function shapeItinerary(itinerary: SerpApiItinerary): FlightOption | null {
     durationMinutes: inferDurationMinutes(itinerary, segments),
     stops: Math.max(0, segments.length - 1),
   };
+
+  if (typeof itinerary.booking_token === "string" && itinerary.booking_token.trim() !== "") {
+    option.bookingToken = itinerary.booking_token.trim();
+  }
+
+  return option;
 }
 
 function shapeHotelProperty(property: SerpApiHotelProperty): HotelOption | null {
@@ -269,6 +336,25 @@ function buildHotelRequestUrl(query: HotelQuery, apiKey: string): string {
   return url.toString();
 }
 
+function buildFlightBookingOptionsRequestUrl(
+  query: FlightBookingQuery,
+  token: string,
+  apiKey: string,
+): string {
+  const url = new URL("https://serpapi.com/search.json");
+
+  url.searchParams.set("engine", "google_flights");
+  url.searchParams.set("type", "2");
+  url.searchParams.set("departure_id", query.origin);
+  url.searchParams.set("arrival_id", query.destination);
+  url.searchParams.set("outbound_date", query.departureDate);
+  url.searchParams.set("booking_token", token);
+  url.searchParams.set("currency", "USD");
+  url.searchParams.set("api_key", apiKey);
+
+  return url.toString();
+}
+
 function toSerpApiStopsFilter(maxStops: number): string {
   if (maxStops === 0) {
     return "1";
@@ -315,7 +401,20 @@ async function fetchSerpApiJson<T>(
   }
 
   if (!response.ok) {
-    throw new CliError(`SerpApi request failed with status ${response.status}`, ExitCode.ApiFailure);
+    let details = "";
+    try {
+      const raw = await response.text();
+      if (raw.trim().length > 0) {
+        details = `: ${raw.trim()}`;
+      }
+    } catch {
+      details = "";
+    }
+
+    throw new CliError(
+      `SerpApi request failed with status ${response.status}${details}`,
+      ExitCode.ApiFailure,
+    );
   }
 
   try {
@@ -344,4 +443,90 @@ function extractMinutes(value: string): number | null {
   }
 
   return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function compareByDepartureTime(a: FlightOption, b: FlightOption): number {
+  const aKey = departureSortKey(a.departureTime);
+  const bKey = departureSortKey(b.departureTime);
+
+  if (aKey !== bKey) {
+    return aKey - bKey;
+  }
+
+  return a.price - b.price;
+}
+
+function departureSortKey(value: string): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})\s+([01]\d|2[0-3]):([0-5]\d)$/.exec(value.trim());
+  if (!match) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+
+  return (
+    year * 100000000 +
+    month * 1000000 +
+    day * 10000 +
+    hour * 100 +
+    minute
+  );
+}
+
+function extractBookingLinks(payload: SerpApiBookingOptionsResponse): Array<{
+  url: string;
+  source?: string;
+  price?: number;
+}> {
+  const links: Array<{ url: string; source?: string; price?: number }> = [];
+  collectBookingLinks(payload as SerpApiBookingNode, links);
+
+  const deduped = new Map<string, { url: string; source?: string; price?: number }>();
+  for (const link of links) {
+    if (!deduped.has(link.url)) {
+      deduped.set(link.url, link);
+    }
+  }
+
+  return [...deduped.values()];
+}
+
+function collectBookingLinks(
+  node: unknown,
+  links: Array<{ url: string; source?: string; price?: number }>,
+): void {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      collectBookingLinks(item, links);
+    }
+    return;
+  }
+
+  if (!node || typeof node !== "object") {
+    return;
+  }
+
+  const value = node as SerpApiBookingNode;
+  const bookingUrl = value.booking_request?.url;
+  const bookingPostData = value.booking_request?.post_data;
+  if (typeof bookingUrl === "string" && bookingUrl.trim() !== "") {
+    const finalUrl =
+      typeof bookingPostData === "string" && bookingPostData.trim() !== ""
+        ? `${bookingUrl}${bookingUrl.includes("?") ? "&" : "?"}${bookingPostData}`
+        : bookingUrl;
+
+    links.push({
+      url: finalUrl,
+      source: typeof value.source === "string" ? value.source : undefined,
+      price: Number.isFinite(value.price) ? value.price : undefined,
+    });
+  }
+
+  for (const child of Object.values(value)) {
+    collectBookingLinks(child, links);
+  }
 }

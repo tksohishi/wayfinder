@@ -1,10 +1,9 @@
 name: Publish to npm
 
 on:
-  push:
-    tags:
-      - "v*"
-  workflow_dispatch:
+  release:
+    types:
+      - published
 
 jobs:
   publish:
@@ -16,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -34,14 +35,25 @@ jobs:
       - name: Run tests
         run: bun test
 
-      - name: Verify tag matches package version
-        if: github.ref_type == 'tag'
+      - name: Verify release tag matches package version
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG_VERSION="${{ github.event.release.tag_name }}"
+          TAG_VERSION="${TAG_VERSION#v}"
           PACKAGE_VERSION="$(jq -r '.version' package.json)"
           if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
             echo "Tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)."
             exit 1
+          fi
+
+      - name: Skip if version already exists on npm
+        run: |
+          PACKAGE_NAME="$(jq -r '.name' package.json)"
+          PACKAGE_VERSION="$(jq -r '.version' package.json)"
+          PUBLISHED_VERSION="$(npm view "$PACKAGE_NAME" version 2>/dev/null || true)"
+
+          if [ "$PUBLISHED_VERSION" = "$PACKAGE_VERSION" ]; then
+            echo "Version $PACKAGE_VERSION is already published on npm, skipping."
+            exit 0
           fi
 
       - name: Publish package

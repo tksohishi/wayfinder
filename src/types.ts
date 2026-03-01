@@ -49,7 +49,25 @@ export interface ParsedArgsHotels {
   query: HotelQuery;
 }
 
-export type ParsedArgs = ParsedArgsHelp | ParsedArgsFlights | ParsedArgsHotels;
+export interface FlightBookingQuery {
+  origin: string;
+  destination: string;
+  departureDate: string;
+  tokens: string[];
+}
+
+export interface ParsedArgsFlightBooking {
+  help: false;
+  mode: "flight-booking";
+  outputJson: boolean;
+  query: FlightBookingQuery;
+}
+
+export type ParsedArgs =
+  | ParsedArgsHelp
+  | ParsedArgsFlights
+  | ParsedArgsHotels
+  | ParsedArgsFlightBooking;
 
 export interface FlightOption {
   price: number;
@@ -58,6 +76,7 @@ export interface FlightOption {
   arrivalTime: string;
   durationMinutes: number;
   stops: number;
+  bookingToken?: string;
 }
 
 export interface HotelOption {
@@ -68,4 +87,21 @@ export interface HotelOption {
   reviews?: number;
   location: string;
   link?: string;
+}
+
+export interface FlightSearchResult {
+  options: FlightOption[];
+  googleFlightsUrl?: string;
+}
+
+export interface FlightBookingLink {
+  url: string;
+  source?: string;
+  price?: number;
+}
+
+export interface FlightBookingResult {
+  token: string;
+  googleFlightsUrl?: string;
+  links: FlightBookingLink[];
 }
