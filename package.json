@@ -1,13 +1,14 @@
 {
-  "name": "@tksohishi/wayfinder",
+  "name": "@tks/wayfinder",
   "version": "0.1.0",
   "license": "MIT",
   "private": false,
   "type": "module",
   "bin": {
-    "wayfinder": "./src/cli.ts"
+    "wayfinder": "./bin/wayfinder"
   },
   "files": [
+    "bin",
     "src",
     "README.md",
     "package.json"

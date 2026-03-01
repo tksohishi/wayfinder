@@ -4,12 +4,20 @@ CLI for one way flight search with SerpApi Google Flights.
 
 ## Install
 
+Requires [Bun](https://bun.sh/) runtime.
+
 ```bash
+bun install -g @tks/wayfinder
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/tksohishi/wayfinder.git
+cd wayfinder
 bun install
 bun link
 ```
-
-`bun link` makes the `wayfinder` command available in your shell.
 
 ## Setup
 
