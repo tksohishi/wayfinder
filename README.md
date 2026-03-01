@@ -1,6 +1,4 @@
-# wayfinder
-
-CLI for one way flight search with SerpApi Google Flights.
+# 🛫 wayfinder — Travel search for your terminal and your AI agents.
 
 ## Install
 

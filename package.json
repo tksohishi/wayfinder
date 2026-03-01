@@ -1,6 +1,7 @@
 {
   "name": "@tks/wayfinder",
   "version": "0.1.0",
+  "description": "Travel search for your terminal and your AI agents",
   "license": "MIT",
   "private": false,
   "type": "module",

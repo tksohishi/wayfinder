@@ -4,13 +4,13 @@ This file provides guidance to AI coding agents working with code in this reposi
 
 ## Summary
 
-CLI tool for one-way flight search using the SerpApi Google Flights engine. Outputs results as a formatted table or structured JSON.
+Travel search for your terminal and your AI agents. Outputs results as a formatted table or structured JSON.
 
 ## Tech Stack
 
 - Bun (runtime, test runner, package manager)
 - TypeScript (no build step; Bun runs `.ts` directly)
-- SerpApi Google Flights
+- SerpApi
 
 ## Architecture
 
