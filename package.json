@@ -2,11 +2,19 @@
   "name": "@tks/wayfinder",
   "version": "0.2.0",
   "description": "Travel search for your terminal and your AI agents",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tksohishi/wayfinder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tksohishi/wayfinder/issues"
+  },
+  "homepage": "https://github.com/tksohishi/wayfinder#readme",
   "license": "MIT",
   "private": false,
   "type": "module",
   "bin": {
-    "wayfinder": "./bin/wayfinder"
+    "wayfinder": "bin/wayfinder"
   },
   "files": [
     "bin",
