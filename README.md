@@ -99,3 +99,27 @@ Structured hotel output for scripting:
 ```bash
 wayfinder hotels --where "Paris" --check-in 2026-04-10 --check-out 2026-04-12 --json | jq '.results[] | {name,nightlyPrice,rating}'
 ```
+
+Search nearby restaurants from a location:
+
+```bash
+wayfinder places --near "Shinjuku, Tokyo"
+```
+
+Use a specific location name for better relevance:
+
+```bash
+wayfinder places --near "Domino Park, Brooklyn, NY"
+```
+
+Search nearby coffee spots:
+
+```bash
+wayfinder places --near "Shinjuku, Tokyo" --type coffee --limit 5
+```
+
+Structured places output for scripting:
+
+```bash
+wayfinder places --near "Shinjuku, Tokyo" --type coffee --json | jq '.results[] | {name,rating,reviews,googleMapsUrl}'
+```

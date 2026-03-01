@@ -8,6 +8,9 @@ import {
   FlightSearchResult,
   HotelOption,
   HotelQuery,
+  PlaceOption,
+  PlaceQuery,
+  PlaceType,
 } from "./types";
 
 interface SerpApiAirport {
@@ -78,6 +81,23 @@ interface SerpApiHotelProperty {
 interface SerpApiHotelsResponse {
   error?: string;
   properties?: SerpApiHotelProperty[];
+}
+
+interface SerpApiLocalResult {
+  title?: string;
+  rating?: number;
+  reviews?: number;
+  address?: string;
+  distance?: string;
+  open_state?: string;
+  type?: string;
+  place_id_search?: string;
+  data_id?: string;
+}
+
+interface SerpApiPlacesResponse {
+  error?: string;
+  local_results?: SerpApiLocalResult[];
 }
 
 export async function searchFlights(
@@ -158,6 +178,25 @@ export async function searchHotels(
   return hotels;
 }
 
+export async function searchPlaces(
+  query: PlaceQuery,
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<PlaceOption[]> {
+  const payload = await fetchSerpApiJson<SerpApiPlacesResponse>(
+    buildPlaceRequestUrl(query, apiKey),
+    fetchImpl,
+  );
+
+  if (typeof payload.error === "string" && payload.error.trim() !== "") {
+    throw new CliError(`SerpApi error: ${payload.error}`, ExitCode.ApiFailure);
+  }
+
+  const places = shapePlaceSerpApiResponse(payload, query.type);
+  places.sort((a, b) => b.score - a.score);
+  return places.slice(0, query.limit);
+}
+
 export function shapeSerpApiResponse(payload: SerpApiFlightsResponse): FlightOption[] {
   const merged = [...(payload.best_flights ?? []), ...(payload.other_flights ?? [])];
 
@@ -170,6 +209,15 @@ export function shapeHotelSerpApiResponse(payload: SerpApiHotelsResponse): Hotel
   return (payload.properties ?? [])
     .map((property) => shapeHotelProperty(property))
     .filter((option): option is HotelOption => option !== null);
+}
+
+export function shapePlaceSerpApiResponse(
+  payload: SerpApiPlacesResponse,
+  category: PlaceType,
+): PlaceOption[] {
+  return (payload.local_results ?? [])
+    .map((result) => shapeLocalResult(result, category))
+    .filter((option): option is PlaceOption => option !== null);
 }
 
 export function filterByDepartureWindow(
@@ -336,6 +384,17 @@ function buildHotelRequestUrl(query: HotelQuery, apiKey: string): string {
   return url.toString();
 }
 
+function buildPlaceRequestUrl(query: PlaceQuery, apiKey: string): string {
+  const url = new URL("https://serpapi.com/search.json");
+  const searchTerm = query.type === "coffee" ? "coffee" : "restaurants";
+
+  url.searchParams.set("engine", "google_maps");
+  url.searchParams.set("type", "search");
+  url.searchParams.set("q", `${searchTerm} near ${query.near}`);
+  url.searchParams.set("api_key", apiKey);
+  return url.toString();
+}
+
 function buildFlightBookingOptionsRequestUrl(
   query: FlightBookingQuery,
   token: string,
@@ -381,6 +440,101 @@ function toSerpApiRating(rating: 3.5 | 4 | 4.5 | 5): string {
   }
 
   return "10";
+}
+
+function shapeLocalResult(result: SerpApiLocalResult, category: PlaceType): PlaceOption | null {
+  if (typeof result.title !== "string" || result.title.trim() === "") {
+    return null;
+  }
+
+  const rating = Number.isFinite(result.rating) ? (result.rating as number) : undefined;
+  const reviews = Number.isFinite(result.reviews) ? (result.reviews as number) : undefined;
+  const distanceMeters = parseDistanceMeters(result.distance);
+  const link = buildGoogleMapsPlaceLink(result);
+  const googleMapsUrl = buildDirectGoogleMapsUrl(result);
+
+  return {
+    name: result.title.trim(),
+    category,
+    rating,
+    reviews,
+    address: typeof result.address === "string" ? result.address : undefined,
+    distanceMeters,
+    openState: typeof result.open_state === "string" ? result.open_state : undefined,
+    link,
+    googleMapsUrl,
+    score: computePlaceScore(rating, reviews, distanceMeters),
+  };
+}
+
+function computePlaceScore(
+  rating: number | undefined,
+  reviews: number | undefined,
+  distanceMeters: number | undefined,
+): number {
+  const ratingComponent = typeof rating === "number" ? rating / 5 : 0;
+  const reviewComponent =
+    typeof reviews === "number" && reviews > 0 ? Math.log10(reviews + 1) / 4 : 0;
+  const distanceComponent =
+    typeof distanceMeters === "number" && distanceMeters >= 0
+      ? Math.max(0, 1 - distanceMeters / 10_000)
+      : 0;
+
+  return ratingComponent * 0.6 + reviewComponent * 0.25 + distanceComponent * 0.15;
+}
+
+function parseDistanceMeters(value?: string): number | undefined {
+  if (typeof value !== "string" || value.trim() === "") {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/,/g, "");
+  const match = /^(\d+(?:\.\d+)?)\s*(m|meter|meters|km|mi)$/.exec(normalized);
+  if (!match) {
+    return undefined;
+  }
+
+  const amount = Number(match[1]);
+  const unit = match[2];
+  if (!Number.isFinite(amount)) {
+    return undefined;
+  }
+
+  if (unit === "m" || unit === "meter" || unit === "meters") {
+    return amount;
+  }
+
+  if (unit === "km") {
+    return amount * 1000;
+  }
+
+  return amount * 1609.34;
+}
+
+function buildGoogleMapsPlaceLink(result: SerpApiLocalResult): string | undefined {
+  if (typeof result.place_id_search === "string" && result.place_id_search.trim() !== "") {
+    return result.place_id_search;
+  }
+
+  return undefined;
+}
+
+function buildDirectGoogleMapsUrl(result: SerpApiLocalResult): string | undefined {
+  if (typeof result.place_id_search !== "string" || result.place_id_search.trim() === "") {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(result.place_id_search);
+    const placeId = parsed.searchParams.get("place_id");
+    if (!placeId || placeId.trim() === "") {
+      return undefined;
+    }
+
+    return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}`;
+  } catch {
+    return undefined;
+  }
 }
 
 async function fetchSerpApiJson<T>(

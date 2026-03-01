@@ -114,6 +114,40 @@ describe("parseCliArgs", () => {
     });
   });
 
+  test("parses places args with defaults", () => {
+    const parsed = parseCliArgs(["places", "--near", "Shinjuku, Tokyo"]);
+
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("places");
+    expect(parsed.query).toEqual({
+      near: "Shinjuku, Tokyo",
+      type: "restaurant",
+      limit: 10,
+    });
+  });
+
+  test("parses places args with explicit type and limit", () => {
+    const parsed = parseCliArgs([
+      "places",
+      "--near",
+      "Kyoto Station",
+      "--type",
+      "coffee",
+      "--limit",
+      "5",
+      "--json",
+    ]);
+
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("places");
+    expect(parsed.outputJson).toBeTrue();
+    expect(parsed.query).toEqual({
+      near: "Kyoto Station",
+      type: "coffee",
+      limit: 5,
+    });
+  });
+
   test("parses setup mode", () => {
     const parsed = parseCliArgs(["setup"]);
     expect(parsed.help).toBeFalse();
@@ -152,7 +186,7 @@ describe("parseCliArgs", () => {
 
   test("rejects command without subcommand", () => {
     expect(() => parseCliArgs(["--from", "SFO", "--to", "JFK", "--date", "2099-03-20"])).toThrow(
-      "Missing subcommand: use `setup`, `flights`, or `hotels`",
+      "Missing subcommand: use `setup`, `flights`, `hotels`, or `places`",
     );
   });
 
@@ -193,6 +227,22 @@ describe("parseCliArgs", () => {
   test("requires token for flights booking", () => {
     expect(() => parseCliArgs(["flights", "booking"])).toThrow(
       "Missing required flags: --from, --to, --date",
+    );
+  });
+
+  test("rejects places command without near flag", () => {
+    expect(() => parseCliArgs(["places"])).toThrow("Missing required flag: --near");
+  });
+
+  test("rejects invalid place type", () => {
+    expect(() => parseCliArgs(["places", "--near", "Tokyo", "--type", "bar"])).toThrow(
+      "--type must be one of: restaurant, coffee",
+    );
+  });
+
+  test("rejects invalid places limit", () => {
+    expect(() => parseCliArgs(["places", "--near", "Tokyo", "--limit", "0"])).toThrow(
+      "--limit must be a positive integer",
     );
   });
 });

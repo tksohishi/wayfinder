@@ -1,4 +1,4 @@
-import { FlightOption, HotelOption } from "./types";
+import { FlightOption, HotelOption, PlaceOption } from "./types";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -142,6 +142,74 @@ export function renderHotelTable(options: HotelOption[]): string {
   return lines.join("\n");
 }
 
+export function renderPlaceTable(options: PlaceOption[]): string {
+  const rows = options.map((option) => ({
+    name: option.name,
+    type: option.category,
+    rating: typeof option.rating === "number" ? option.rating.toFixed(1) : "n/a",
+    reviews: typeof option.reviews === "number" ? String(option.reviews) : "n/a",
+    distance: formatDistance(option.distanceMeters),
+    address: option.address ?? "n/a",
+  }));
+
+  const headers = {
+    name: "NAME",
+    type: "TYPE",
+    rating: "RATING",
+    reviews: "REVIEWS",
+    distance: "DISTANCE",
+    address: "ADDRESS",
+  };
+
+  const widths = {
+    name: maxWidth(rows, "name", headers.name),
+    type: maxWidth(rows, "type", headers.type),
+    rating: maxWidth(rows, "rating", headers.rating),
+    reviews: maxWidth(rows, "reviews", headers.reviews),
+    distance: maxWidth(rows, "distance", headers.distance),
+    address: maxWidth(rows, "address", headers.address),
+  };
+
+  const lines: string[] = [];
+
+  lines.push(
+    [
+      headers.name.padEnd(widths.name),
+      headers.type.padEnd(widths.type),
+      headers.rating.padEnd(widths.rating),
+      headers.reviews.padEnd(widths.reviews),
+      headers.distance.padEnd(widths.distance),
+      headers.address.padEnd(widths.address),
+    ].join("  "),
+  );
+
+  lines.push(
+    [
+      "-".repeat(widths.name),
+      "-".repeat(widths.type),
+      "-".repeat(widths.rating),
+      "-".repeat(widths.reviews),
+      "-".repeat(widths.distance),
+      "-".repeat(widths.address),
+    ].join("  "),
+  );
+
+  for (const row of rows) {
+    lines.push(
+      [
+        row.name.padEnd(widths.name),
+        row.type.padEnd(widths.type),
+        row.rating.padEnd(widths.rating),
+        row.reviews.padEnd(widths.reviews),
+        row.distance.padEnd(widths.distance),
+        row.address.padEnd(widths.address),
+      ].join("  "),
+    );
+  }
+
+  return lines.join("\n");
+}
+
 function maxWidth(rows: Array<Record<string, string>>, key: string, header: string): number {
   return rows.reduce((width, row) => Math.max(width, row[key].length), header.length);
 }
@@ -163,4 +231,17 @@ function formatDuration(totalMinutes: number): string {
   }
 
   return `${hours}h ${minutes}m`;
+}
+
+function formatDistance(distanceMeters?: number): string {
+  if (!Number.isFinite(distanceMeters)) {
+    return "n/a";
+  }
+
+  if ((distanceMeters as number) < 1000) {
+    return `${Math.round(distanceMeters as number)}m`;
+  }
+
+  const km = (distanceMeters as number) / 1000;
+  return `${km.toFixed(1)}km`;
 }

@@ -309,6 +309,114 @@ describe("runWayfinder", () => {
     expect(stderr[0]).toContain("No hotels found");
   });
 
+  test("runs places search with json output", async () => {
+    let requestedUrl = "";
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const fetchImpl: typeof fetch = async (input) => {
+      requestedUrl = String(input);
+
+      return new Response(
+        JSON.stringify({
+          local_results: [
+            {
+              title: "Cafe A",
+              rating: 4.6,
+              reviews: 210,
+              address: "Shinjuku",
+              distance: "0.3 km",
+              open_state: "Open",
+            },
+            {
+              title: "Cafe B",
+              rating: 4.3,
+              reviews: 75,
+              address: "Shinjuku",
+              distance: "0.2 km",
+              open_state: "Open",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      );
+    };
+
+    const code = await runWayfinder(
+      [
+        "places",
+        "--near",
+        "Shinjuku, Tokyo",
+        "--type",
+        "coffee",
+        "--limit",
+        "1",
+        "--json",
+      ],
+      {
+        env: { SERPAPI_API_KEY: "test-key" },
+        fetchImpl,
+        output: {
+          stdout: (value: string) => stdout.push(value),
+          stderr: (value: string) => stderr.push(value),
+        },
+      },
+    );
+
+    expect(code).toBe(ExitCode.Success);
+    expect(stderr).toHaveLength(0);
+    expect(requestedUrl).toContain("engine=google_maps");
+    expect(requestedUrl).toContain("type=search");
+    expect(requestedUrl).toContain("coffee");
+    const payload = JSON.parse(stdout[0] as string) as {
+      query: { near: string; type: string; limit: number };
+      results: Array<{ name: string }>;
+    };
+
+    expect(payload.query.near).toBe("Shinjuku, Tokyo");
+    expect(payload.query.type).toBe("coffee");
+    expect(payload.query.limit).toBe(1);
+    expect(payload.results).toHaveLength(1);
+  });
+
+  test("returns no results exit code when places list is empty", async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const fetchImpl: typeof fetch = async () =>
+      new Response(JSON.stringify({ local_results: [] }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+
+    const code = await runWayfinder(
+      [
+        "places",
+        "--near",
+        "Shinjuku, Tokyo",
+      ],
+      {
+        env: { SERPAPI_API_KEY: "test-key" },
+        fetchImpl,
+        output: {
+          stdout: (value: string) => stdout.push(value),
+          stderr: (value: string) => stderr.push(value),
+        },
+      },
+    );
+
+    expect(code).toBe(ExitCode.NoResults);
+    expect(stdout).toHaveLength(0);
+    expect(stderr[0]).toContain("No places found");
+  });
+
   test("runs setup and writes config file", async () => {
     const homeDir = mkdtempSync(path.join(tmpdir(), "wayfinder-setup-"));
     const stdout: string[] = [];

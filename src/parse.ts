@@ -1,5 +1,13 @@
 import { CliError } from "./errors";
-import { ExitCode, FlightBookingQuery, FlightQuery, HotelQuery, ParsedArgs } from "./types";
+import {
+  ExitCode,
+  FlightBookingQuery,
+  FlightQuery,
+  HotelQuery,
+  ParsedArgs,
+  PlaceQuery,
+  PlaceType,
+} from "./types";
 
 interface FlightRawOptions {
   from?: string;
@@ -35,7 +43,15 @@ interface FlightBookingRawOptions {
   help: boolean;
 }
 
-type SearchMode = "flights" | "hotels" | "flight-booking" | "setup";
+interface PlaceRawOptions {
+  near?: string;
+  type?: string;
+  limit?: string;
+  outputJson: boolean;
+  help: boolean;
+}
+
+type SearchMode = "flights" | "hotels" | "places" | "flight-booking" | "setup";
 
 const HELP_FLAGS = new Set(["-h", "--help"]);
 
@@ -55,6 +71,10 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
 
   if (mode === "flight-booking") {
     return parseFlightBookingArgs(args);
+  }
+
+  if (mode === "places") {
+    return parsePlacesArgs(args);
   }
 
   if (mode === "setup") {
@@ -281,6 +301,66 @@ function parseFlightBookingArgs(args: string[]): ParsedArgs {
   };
 }
 
+function parsePlacesArgs(args: string[]): ParsedArgs {
+  const raw: PlaceRawOptions = {
+    outputJson: false,
+    help: false,
+  };
+
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+
+    if (HELP_FLAGS.has(token)) {
+      raw.help = true;
+      continue;
+    }
+
+    if (token === "--json") {
+      raw.outputJson = true;
+      continue;
+    }
+
+    if (!token.startsWith("--")) {
+      throw new CliError(`Unexpected argument: ${token}`, ExitCode.InvalidInput);
+    }
+
+    const value = args[i + 1];
+    if (!value || value.startsWith("--")) {
+      throw new CliError(`Missing value for ${token}`, ExitCode.InvalidInput);
+    }
+
+    switch (token) {
+      case "--near":
+        raw.near = value;
+        break;
+      case "--type":
+        raw.type = value;
+        break;
+      case "--limit":
+        raw.limit = value;
+        break;
+      default:
+        throw new CliError(`Unknown flag: ${token}`, ExitCode.InvalidInput);
+    }
+
+    i += 1;
+  }
+
+  if (raw.help) {
+    return {
+      help: true,
+      outputJson: raw.outputJson,
+    };
+  }
+
+  return {
+    help: false,
+    mode: "places",
+    outputJson: raw.outputJson,
+    query: buildPlaceQuery(raw),
+  };
+}
+
 function parseSetupArgs(args: string[]): ParsedArgs {
   const outputJson = args.includes("--json");
   const reset = args.includes("--reset");
@@ -409,6 +489,22 @@ function buildFlightBookingQuery(raw: FlightBookingRawOptions): FlightBookingQue
   };
 }
 
+function buildPlaceQuery(raw: PlaceRawOptions): PlaceQuery {
+  if (!raw.near) {
+    throw new CliError("Missing required flag: --near", ExitCode.InvalidInput);
+  }
+
+  const near = normalizeLocation(raw.near);
+  const type = raw.type ? normalizePlaceType(raw.type) : "restaurant";
+  const limit = raw.limit ? normalizeLimit(raw.limit, "--limit") : 10;
+
+  return {
+    near,
+    type,
+    limit,
+  };
+}
+
 function stripSubcommands(argv: string[]): { mode: SearchMode; args: string[] } {
   const args = [...argv];
   if (args[0] === "hotels") {
@@ -435,8 +531,13 @@ function stripSubcommands(argv: string[]): { mode: SearchMode; args: string[] } 
     return { mode: "setup", args };
   }
 
+  if (args[0] === "places") {
+    args.shift();
+    return { mode: "places", args };
+  }
+
   throw new CliError(
-    "Missing subcommand: use `setup`, `flights`, or `hotels`",
+    "Missing subcommand: use `setup`, `flights`, `hotels`, or `places`",
     ExitCode.InvalidInput,
   );
 }
@@ -521,6 +622,15 @@ function normalizeMaxPrice(value: string): number {
   return numeric;
 }
 
+function normalizeLimit(value: string, flagName: string): number {
+  const numeric = Number.parseInt(value, 10);
+  if (!Number.isInteger(numeric) || numeric <= 0) {
+    throw new CliError(`${flagName} must be a positive integer`, ExitCode.InvalidInput);
+  }
+
+  return numeric;
+}
+
 function normalizeAdults(value: string): number {
   const numeric = Number.parseInt(value, 10);
   if (!Number.isInteger(numeric) || numeric <= 0) {
@@ -537,6 +647,15 @@ function normalizeMinRating(value: string): 3.5 | 4 | 4.5 | 5 {
   }
 
   return numeric;
+}
+
+function normalizePlaceType(value: string): PlaceType {
+  const normalized = value.trim().toLowerCase();
+  if (normalized !== "restaurant" && normalized !== "coffee") {
+    throw new CliError("--type must be one of: restaurant, coffee", ExitCode.InvalidInput);
+  }
+
+  return normalized;
 }
 
 function normalizeTime(value: string, flagName: string): number {

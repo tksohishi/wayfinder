@@ -30,6 +30,14 @@ export interface HotelQuery {
   minRating?: 3.5 | 4 | 4.5 | 5;
 }
 
+export type PlaceType = "restaurant" | "coffee";
+
+export interface PlaceQuery {
+  near: string;
+  type: PlaceType;
+  limit: number;
+}
+
 export interface ParsedArgsHelp {
   help: true;
   outputJson: boolean;
@@ -70,10 +78,18 @@ export interface ParsedArgsSetup {
   reset: boolean;
 }
 
+export interface ParsedArgsPlaces {
+  help: false;
+  mode: "places";
+  outputJson: boolean;
+  query: PlaceQuery;
+}
+
 export type ParsedArgs =
   | ParsedArgsHelp
   | ParsedArgsFlights
   | ParsedArgsHotels
+  | ParsedArgsPlaces
   | ParsedArgsFlightBooking
   | ParsedArgsSetup;
 
@@ -95,6 +111,19 @@ export interface HotelOption {
   reviews?: number;
   location: string;
   link?: string;
+}
+
+export interface PlaceOption {
+  name: string;
+  category: PlaceType;
+  rating?: number;
+  reviews?: number;
+  address?: string;
+  distanceMeters?: number;
+  openState?: string;
+  link?: string;
+  googleMapsUrl?: string;
+  score: number;
 }
 
 export interface FlightSearchResult {

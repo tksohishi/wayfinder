@@ -1,8 +1,8 @@
 import { getConfigPath, readConfigApiKey, resolveApiKey, writeConfigApiKey } from "./config";
 import { CliError } from "./errors";
-import { renderFlightTable, renderHotelTable } from "./format";
+import { renderFlightTable, renderHotelTable, renderPlaceTable } from "./format";
 import { parseCliArgs } from "./parse";
-import { searchFlightBookingOptions, searchFlights, searchHotels } from "./serpapi";
+import { searchFlightBookingOptions, searchFlights, searchHotels, searchPlaces } from "./serpapi";
 import { ExitCode } from "./types";
 import { createInterface } from "node:readline/promises";
 import { stdin as defaultStdin, stdout as defaultStdout } from "node:process";
@@ -22,7 +22,7 @@ interface RunOptions {
   promptImpl?: (prompt: string) => Promise<string>;
 }
 
-const HELP_TEXT = `wayfinder v0.2.1 travel search
+const HELP_TEXT = `wayfinder v0.3.0 travel search
 
 Usage:
   wayfinder setup [--reset]
@@ -30,6 +30,7 @@ Usage:
   wayfinder flights one-way --from SFO --to JFK --date 2026-03-21 [filters]
   wayfinder flights booking --from SFO --to JFK --date 2026-03-21 --token <BOOKING_TOKEN> [--token <BOOKING_TOKEN>] [--json]
   wayfinder hotels --where "New York, NY" --check-in 2026-03-21 --check-out 2026-03-23 [filters]
+  wayfinder places --near "Shinjuku, Tokyo" [--type restaurant|coffee] [--limit N] [--json]
 
 Setup:
   Runs interactive key setup and stores your SerpApi key in local config.
@@ -64,6 +65,14 @@ Hotels optional filters:
   --adults <N>              Number of adults (default 2)
   --max-price <USD>         Max nightly rate in USD
   --rating <3.5|4|4.5|5>    Minimum guest rating
+
+Places required:
+  --near <QUERY>            Specific location query, example "Domino Park, Brooklyn, NY"
+                            Broad names can return mixed-city results
+
+Places optional filters:
+  --type <restaurant|coffee> Place type (default restaurant)
+  --limit <N>               Maximum number of results (default 10)
 
 Output:
   --json                    Print structured JSON output`;
@@ -181,7 +190,7 @@ export async function runWayfinder(
       } else {
         output.stdout(renderFlightBookingText(flightLinks));
       }
-    } else {
+    } else if (parsed.mode === "hotels") {
       const hotels = await searchHotels(parsed.query, apiKey, options.fetchImpl ?? fetch);
 
       if (hotels.length === 0) {
@@ -201,6 +210,27 @@ export async function runWayfinder(
         );
       } else {
         output.stdout(renderHotelTable(hotels));
+      }
+    } else {
+      const places = await searchPlaces(parsed.query, apiKey, options.fetchImpl ?? fetch);
+
+      if (places.length === 0) {
+        throw new CliError("No places found for the selected query", ExitCode.NoResults);
+      }
+
+      if (parsed.outputJson) {
+        output.stdout(
+          JSON.stringify(
+            {
+              query: parsed.query,
+              results: places,
+            },
+            null,
+            2,
+          ),
+        );
+      } else {
+        output.stdout(renderPlaceTable(places));
       }
     }
 

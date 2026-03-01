@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   filterByDepartureWindow,
   shapeHotelSerpApiResponse,
+  shapePlaceSerpApiResponse,
   shapeSerpApiResponse,
 } from "../src/serpapi";
 
@@ -143,5 +144,70 @@ describe("shapeHotelSerpApiResponse", () => {
       location: "Resort hotel",
       link: undefined,
     });
+  });
+});
+
+describe("shapePlaceSerpApiResponse", () => {
+  test("maps local results and filters invalid rows", () => {
+    const payload = {
+      local_results: [
+        {
+          title: "Cafe One",
+          rating: 4.6,
+          reviews: 180,
+          address: "Shinjuku",
+          distance: "0.4 km",
+          open_state: "Open",
+          place_id_search: "https://serpapi.com/search.json?engine=google_maps&place_id=abc",
+        },
+        {
+          title: "No Distance Coffee",
+          rating: 4.2,
+          reviews: 20,
+          address: "Shibuya",
+        },
+        {
+          title: "",
+          rating: 5,
+        },
+      ],
+    };
+
+    const shaped = shapePlaceSerpApiResponse(payload, "coffee");
+
+    expect(shaped).toHaveLength(2);
+    expect(shaped[0]?.name).toBe("Cafe One");
+    expect(shaped[0]?.category).toBe("coffee");
+    expect(shaped[0]?.distanceMeters).toBe(400);
+    expect(shaped[0]?.openState).toBe("Open");
+    expect(shaped[0]?.link).toContain("engine=google_maps");
+    expect(shaped[0]?.googleMapsUrl).toBe(
+      "https://www.google.com/maps/place/?q=place_id:abc",
+    );
+    expect(typeof shaped[0]?.score).toBe("number");
+  });
+
+  test("ranking score favors higher quality and reasonable distance", () => {
+    const payload = {
+      local_results: [
+        {
+          title: "Top Pick",
+          rating: 4.8,
+          reviews: 300,
+          distance: "0.5 km",
+        },
+        {
+          title: "Far But Great",
+          rating: 4.9,
+          reviews: 320,
+          distance: "8 km",
+        },
+      ],
+    };
+
+    const shaped = shapePlaceSerpApiResponse(payload, "restaurant");
+    const sorted = [...shaped].sort((a, b) => b.score - a.score);
+
+    expect(sorted[0]?.name).toBe("Top Pick");
   });
 });
