@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { filterByDepartureWindow, shapeSerpApiResponse } from "../src/serpapi";
+import {
+  filterByDepartureWindow,
+  shapeHotelSerpApiResponse,
+  shapeSerpApiResponse,
+} from "../src/serpapi";
 
 describe("shapeSerpApiResponse", () => {
   test("maps SerpApi itineraries to flight options", () => {
@@ -88,5 +92,56 @@ describe("shapeSerpApiResponse", () => {
 
     expect(filtered).toHaveLength(1);
     expect(filtered[0]?.airline).toBe("B");
+  });
+});
+
+describe("shapeHotelSerpApiResponse", () => {
+  test("maps hotel properties and skips missing prices", () => {
+    const payload = {
+      properties: [
+        {
+          name: "Hotel One",
+          rate_per_night: { lowest: 180 },
+          total_rate: { lowest: 420 },
+          overall_rating: 4.3,
+          reviews: 1280,
+          description: "Midtown Manhattan",
+          link: "https://example.com/hotel-one",
+        },
+        {
+          name: "Hotel Two",
+          rate_per_night: { extracted_lowest: 150 },
+          overall_rating: 4.0,
+          reviews: 880,
+          type: "Resort hotel",
+        },
+        {
+          name: "Invalid Hotel",
+          total_rate: { lowest: 500 },
+        },
+      ],
+    };
+
+    const shaped = shapeHotelSerpApiResponse(payload);
+
+    expect(shaped).toHaveLength(2);
+    expect(shaped[0]).toEqual({
+      name: "Hotel One",
+      nightlyPrice: 180,
+      totalPrice: 420,
+      rating: 4.3,
+      reviews: 1280,
+      location: "Midtown Manhattan",
+      link: "https://example.com/hotel-one",
+    });
+    expect(shaped[1]).toEqual({
+      name: "Hotel Two",
+      nightlyPrice: 150,
+      totalPrice: undefined,
+      rating: 4,
+      reviews: 880,
+      location: "Resort hotel",
+      link: undefined,
+    });
   });
 });

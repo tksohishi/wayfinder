@@ -1,7 +1,7 @@
 import { CliError } from "./errors";
-import { ExitCode, ParsedArgs } from "./types";
+import { ExitCode, FlightQuery, HotelQuery, ParsedArgs } from "./types";
 
-interface RawOptions {
+interface FlightRawOptions {
   from?: string;
   to?: string;
   date?: string;
@@ -10,15 +10,46 @@ interface RawOptions {
   maxPrice?: string;
   departAfter?: string;
   departBefore?: string;
+  excludeBasic: boolean;
   outputJson: boolean;
   help: boolean;
 }
 
+interface HotelRawOptions {
+  where?: string;
+  checkIn?: string;
+  checkOut?: string;
+  adults?: string;
+  maxPrice?: string;
+  rating?: string;
+  outputJson: boolean;
+  help: boolean;
+}
+
+type SearchMode = "flights" | "hotels";
+
 const HELP_FLAGS = new Set(["-h", "--help"]);
 
 export function parseCliArgs(argv: string[]): ParsedArgs {
-  const args = stripSubcommands(argv);
-  const raw: RawOptions = {
+  if (argv.some((token) => HELP_FLAGS.has(token))) {
+    return {
+      help: true,
+      outputJson: argv.includes("--json"),
+    };
+  }
+
+  const { mode, args } = stripSubcommands(argv);
+
+  if (mode === "hotels") {
+    return parseHotelsArgs(args);
+  }
+
+  return parseFlightsArgs(args);
+}
+
+function parseFlightsArgs(args: string[]): ParsedArgs {
+  const raw: FlightRawOptions = {
+    excludeBasic: false,
     outputJson: false,
     help: false,
   };
@@ -33,6 +64,11 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
 
     if (token === "--json") {
       raw.outputJson = true;
+      continue;
+    }
+
+    if (token === "--exclude-basic") {
+      raw.excludeBasic = true;
       continue;
     }
 
@@ -84,6 +120,84 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
     };
   }
 
+  return {
+    help: false,
+    mode: "flights",
+    outputJson: raw.outputJson,
+    query: buildFlightQuery(raw),
+  };
+}
+
+function parseHotelsArgs(args: string[]): ParsedArgs {
+  const raw: HotelRawOptions = {
+    outputJson: false,
+    help: false,
+  };
+
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+
+    if (HELP_FLAGS.has(token)) {
+      raw.help = true;
+      continue;
+    }
+
+    if (token === "--json") {
+      raw.outputJson = true;
+      continue;
+    }
+
+    if (!token.startsWith("--")) {
+      throw new CliError(`Unexpected argument: ${token}`, ExitCode.InvalidInput);
+    }
+
+    const value = args[i + 1];
+    if (!value || value.startsWith("--")) {
+      throw new CliError(`Missing value for ${token}`, ExitCode.InvalidInput);
+    }
+
+    switch (token) {
+      case "--where":
+        raw.where = value;
+        break;
+      case "--check-in":
+        raw.checkIn = value;
+        break;
+      case "--check-out":
+        raw.checkOut = value;
+        break;
+      case "--adults":
+        raw.adults = value;
+        break;
+      case "--max-price":
+        raw.maxPrice = value;
+        break;
+      case "--rating":
+        raw.rating = value;
+        break;
+      default:
+        throw new CliError(`Unknown flag: ${token}`, ExitCode.InvalidInput);
+    }
+
+    i += 1;
+  }
+
+  if (raw.help) {
+    return {
+      help: true,
+      outputJson: raw.outputJson,
+    };
+  }
+
+  return {
+    help: false,
+    mode: "hotels",
+    outputJson: raw.outputJson,
+    query: buildHotelQuery(raw),
+  };
+}
+
+function buildFlightQuery(raw: FlightRawOptions): FlightQuery {
   if (!raw.from || !raw.to || !raw.date) {
     throw new CliError("Missing required flags: --from, --to, --date", ExitCode.InvalidInput);
   }
@@ -95,7 +209,7 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
     throw new CliError("Origin and destination must be different airports", ExitCode.InvalidInput);
   }
 
-  const departureDate = normalizeDate(raw.date);
+  const departureDate = normalizeDate(raw.date, "departure");
   const airlineCode = raw.airline ? normalizeAirlineCode(raw.airline) : undefined;
   const maxStops = raw.maxStops ? normalizeMaxStops(raw.maxStops) : undefined;
   const maxPrice = raw.maxPrice ? normalizeMaxPrice(raw.maxPrice) : undefined;
@@ -126,32 +240,70 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
   }
 
   return {
-    help: false,
-    outputJson: raw.outputJson,
-    query: {
-      origin,
-      destination,
-      departureDate,
-      airlineCode,
-      maxStops,
-      maxPrice,
-      departureAfterMinutes,
-      departureBeforeMinutes,
-    },
+    origin,
+    destination,
+    departureDate,
+    airlineCode,
+    maxStops,
+    maxPrice,
+    departureAfterMinutes,
+    departureBeforeMinutes,
+    excludeBasic: raw.excludeBasic || undefined,
   };
 }
 
-function stripSubcommands(argv: string[]): string[] {
+function buildHotelQuery(raw: HotelRawOptions): HotelQuery {
+  if (!raw.where || !raw.checkIn || !raw.checkOut) {
+    throw new CliError(
+      "Missing required flags: --where, --check-in, --check-out",
+      ExitCode.InvalidInput,
+    );
+  }
+
+  const location = normalizeLocation(raw.where);
+  const checkInDate = normalizeDate(raw.checkIn, "check-in");
+  const checkOutDate = normalizeDate(raw.checkOut, "check-out");
+  const adults = raw.adults ? normalizeAdults(raw.adults) : 2;
+  const maxPrice = raw.maxPrice ? normalizeMaxPrice(raw.maxPrice) : undefined;
+  const minRating = raw.rating ? normalizeMinRating(raw.rating) : undefined;
+
+  const checkIn = parseDateOnly(checkInDate);
+  const checkOut = parseDateOnly(checkOutDate);
+
+  if (checkOut <= checkIn) {
+    throw new CliError("Check-out date must be after check-in date", ExitCode.InvalidInput);
+  }
+
+  return {
+    location,
+    checkInDate,
+    checkOutDate,
+    adults,
+    maxPrice,
+    minRating,
+  };
+}
+
+function stripSubcommands(argv: string[]): { mode: SearchMode; args: string[] } {
   const args = [...argv];
+  if (args[0] === "hotels") {
+    args.shift();
+    return { mode: "hotels", args };
+  }
 
   if (args[0] === "flights") {
     args.shift();
     if (args[0] === "one-way") {
       args.shift();
     }
+
+    return { mode: "flights", args };
   }
 
-  return args;
+  throw new CliError(
+    "Missing subcommand: use `flights` or `hotels`",
+    ExitCode.InvalidInput,
+  );
 }
 
 function normalizeAirport(value: string, fieldName: "origin" | "destination"): string {
@@ -176,27 +328,43 @@ function normalizeAirlineCode(value: string): string {
   return upper;
 }
 
-function normalizeDate(value: string): string {
+function normalizeLocation(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new CliError("Location cannot be empty", ExitCode.InvalidInput);
+  }
+
+  return trimmed;
+}
+
+function normalizeDate(value: string, fieldName: "departure" | "check-in" | "check-out"): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) {
     throw new CliError("Invalid date. Expected YYYY-MM-DD", ExitCode.InvalidInput);
   }
 
+  const date = parseDateOnly(value);
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
 
-  const date = new Date(year, month - 1, day);
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
-    throw new CliError("Invalid departure date", ExitCode.InvalidInput);
+    if (fieldName === "departure") {
+      throw new CliError("Invalid departure date", ExitCode.InvalidInput);
+    }
+
+    throw new CliError(`Invalid ${fieldName} date`, ExitCode.InvalidInput);
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   if (date < today) {
-    throw new CliError("Departure date cannot be in the past", ExitCode.InvalidInput);
+    if (fieldName === "departure") {
+      throw new CliError("Departure date cannot be in the past", ExitCode.InvalidInput);
+    }
+
+    throw new CliError(`${capitalize(fieldName)} date cannot be in the past`, ExitCode.InvalidInput);
   }
 
   return value;
@@ -218,6 +386,24 @@ function normalizeMaxPrice(value: string): number {
   return numeric;
 }
 
+function normalizeAdults(value: string): number {
+  const numeric = Number.parseInt(value, 10);
+  if (!Number.isInteger(numeric) || numeric <= 0) {
+    throw new CliError("--adults must be a positive integer", ExitCode.InvalidInput);
+  }
+
+  return numeric;
+}
+
+function normalizeMinRating(value: string): 3.5 | 4 | 4.5 | 5 {
+  const numeric = Number.parseFloat(value);
+  if (numeric !== 3.5 && numeric !== 4 && numeric !== 4.5 && numeric !== 5) {
+    throw new CliError("--rating must be one of: 3.5, 4, 4.5, 5", ExitCode.InvalidInput);
+  }
+
+  return numeric;
+}
+
 function normalizeTime(value: string, flagName: string): number {
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
   if (!match) {
@@ -225,4 +411,13 @@ function normalizeTime(value: string, flagName: string): number {
   }
 
   return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function parseDateOnly(value: string): Date {
+  const [year, month, day] = value.split("-").map((part) => Number(part));
+  return new Date(year, month - 1, day);
+}
+
+function capitalize(value: string): string {
+  return value.slice(0, 1).toUpperCase() + value.slice(1);
 }
