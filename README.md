@@ -2,13 +2,19 @@
 
 ## Install
 
-Requires [Bun](https://bun.sh/) runtime.
+Primary install method:
+
+```bash
+brew install tksohishi/tap/wayfinder
+```
+
+Secondary fallback method (requires [Bun](https://bun.sh/) runtime):
 
 ```bash
 bun install -g @tks/wayfinder
 ```
 
-Or install from source:
+Install from source:
 
 ```bash
 git clone https://github.com/tksohishi/wayfinder.git

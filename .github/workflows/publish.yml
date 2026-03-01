@@ -1,22 +1,204 @@
-name: Publish to npm
+name: Release
 
 on:
-  release:
-    types:
-      - published
+  push:
+    tags:
+      - "v*"
 
 jobs:
-  publish:
+  verify:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     permissions:
       contents: read
-      id-token: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.ref_name }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run tests
+        run: bun test
+
+      - name: Verify tag version
+        id: version
+        run: |
+          TAG_VERSION="${{ github.ref_name }}"
+          TAG_VERSION="${TAG_VERSION#v}"
+          PACKAGE_VERSION="$(jq -r '.version' package.json)"
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)."
+            exit 1
+          fi
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+  build-binaries:
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64
+          - os: macos-13
+            arch: x64
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+
+      - name: Build binary
+        run: |
+          mkdir -p dist
+          bun build --compile src/cli.ts --outfile dist/wayfinder
+
+      - name: Package archive and checksum
+        run: |
+          ASSET_NAME="wayfinder-v${{ needs.verify.outputs.version }}-darwin-${{ matrix.arch }}.tar.gz"
+          tar -czf "dist/$ASSET_NAME" -C dist wayfinder
+          shasum -a 256 "dist/$ASSET_NAME" > "dist/$ASSET_NAME.sha256"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+  release-and-tap:
+    needs:
+      - verify
+      - build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAP_REPO: tksohishi/homebrew-tap
+      TAP_TOKEN: ${{ secrets.TAP_GH_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Ensure GitHub release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            echo "Release ${{ github.ref_name }} already exists."
+          else
+            gh release create "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --title "${{ github.ref_name }}" \
+              --notes "Automated release for ${{ github.ref_name }}"
+          fi
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for asset in dist/release-arm64/*.tar.gz dist/release-arm64/*.sha256 dist/release-x64/*.tar.gz dist/release-x64/*.sha256; do
+            gh release upload "${{ github.ref_name }}" "$asset" --repo "${{ github.repository }}" --clobber
+          done
+
+      - name: Validate tap token
+        run: |
+          if [ -z "${TAP_TOKEN}" ]; then
+            echo "TAP_GH_TOKEN is required for Homebrew tap updates."
+            exit 1
+          fi
+
+      - name: Update tap formula
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ARM_ASSET="wayfinder-v${VERSION}-darwin-arm64.tar.gz"
+          X64_ASSET="wayfinder-v${VERSION}-darwin-x64.tar.gz"
+          ARM_SHA_FILE="dist/release-arm64/${ARM_ASSET}.sha256"
+          X64_SHA_FILE="dist/release-x64/${X64_ASSET}.sha256"
+          ARM_SHA="$(cut -d' ' -f1 "$ARM_SHA_FILE")"
+          X64_SHA="$(cut -d' ' -f1 "$X64_SHA_FILE")"
+          RELEASE_BASE="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap-repo
+          cd tap-repo
+
+          cat > Formula/wayfinder.rb <<EOF
+          class Wayfinder < Formula
+            desc "Travel search for your terminal and your AI agents"
+            homepage "https://github.com/tksohishi/wayfinder"
+            license "MIT"
+            version "${VERSION}"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "${RELEASE_BASE}/${ARM_ASSET}"
+                sha256 "${ARM_SHA}"
+              else
+                url "${RELEASE_BASE}/${X64_ASSET}"
+                sha256 "${X64_SHA}"
+              end
+            end
+
+            def install
+              bin.install "wayfinder"
+            end
+
+            test do
+              assert_match "wayfinder", shell_output("#{bin}/wayfinder --help")
+            end
+          end
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/wayfinder.rb
+          if git diff --cached --quiet; then
+            echo "No formula changes to push."
+            exit 0
+          fi
+          git commit -m "chore: update wayfinder formula to v${VERSION}"
+          git push origin main
+
+  npm-backup-publish:
+    needs:
+      - verify
+      - release-and-tap
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -32,29 +214,26 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run tests
-        run: bun test
-
-      - name: Verify release tag matches package version
-        run: |
-          TAG_VERSION="${{ github.event.release.tag_name }}"
-          TAG_VERSION="${TAG_VERSION#v}"
-          PACKAGE_VERSION="$(jq -r '.version' package.json)"
-          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "Tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)."
-            exit 1
-          fi
-
-      - name: Skip if version already exists on npm
+      - name: Decide publish necessity
+        id: npm_status
         run: |
           PACKAGE_NAME="$(jq -r '.name' package.json)"
           PACKAGE_VERSION="$(jq -r '.version' package.json)"
           PUBLISHED_VERSION="$(npm view "$PACKAGE_NAME" version 2>/dev/null || true)"
 
           if [ "$PUBLISHED_VERSION" = "$PACKAGE_VERSION" ]; then
-            echo "Version $PACKAGE_VERSION is already published on npm, skipping."
-            exit 0
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "Version $PACKAGE_VERSION already published; skipping npm."
+          else
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Publish package
+      - name: Publish package to npm
+        id: publish_npm
+        if: steps.npm_status.outputs.should_publish == 'true'
+        continue-on-error: true
         run: npm publish --access public --provenance
+
+      - name: Warn when npm backup publish fails
+        if: steps.publish_npm.outcome == 'failure'
+        run: echo "npm publish failed, continuing because npm is a backup channel."
