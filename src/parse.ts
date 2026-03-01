@@ -35,7 +35,7 @@ interface FlightBookingRawOptions {
   help: boolean;
 }
 
-type SearchMode = "flights" | "hotels" | "flight-booking";
+type SearchMode = "flights" | "hotels" | "flight-booking" | "setup";
 
 const HELP_FLAGS = new Set(["-h", "--help"]);
 
@@ -55,6 +55,10 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
 
   if (mode === "flight-booking") {
     return parseFlightBookingArgs(args);
+  }
+
+  if (mode === "setup") {
+    return parseSetupArgs(args);
   }
 
   return parseFlightsArgs(args);
@@ -277,6 +281,22 @@ function parseFlightBookingArgs(args: string[]): ParsedArgs {
   };
 }
 
+function parseSetupArgs(args: string[]): ParsedArgs {
+  const outputJson = args.includes("--json");
+  const reset = args.includes("--reset");
+  const unsupported = args.filter((token) => token !== "--json" && token !== "--reset");
+  if (unsupported.length > 0) {
+    throw new CliError(`Unknown argument for setup: ${unsupported[0]}`, ExitCode.InvalidInput);
+  }
+
+  return {
+    help: false,
+    mode: "setup",
+    outputJson,
+    reset,
+  };
+}
+
 function buildFlightQuery(raw: FlightRawOptions): FlightQuery {
   if (!raw.from || !raw.to || !raw.date) {
     throw new CliError("Missing required flags: --from, --to, --date", ExitCode.InvalidInput);
@@ -410,8 +430,13 @@ function stripSubcommands(argv: string[]): { mode: SearchMode; args: string[] } 
     return { mode: "flights", args };
   }
 
+  if (args[0] === "setup") {
+    args.shift();
+    return { mode: "setup", args };
+  }
+
   throw new CliError(
-    "Missing subcommand: use `flights` or `hotels`",
+    "Missing subcommand: use `setup`, `flights`, or `hotels`",
     ExitCode.InvalidInput,
   );
 }

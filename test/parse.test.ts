@@ -114,6 +114,20 @@ describe("parseCliArgs", () => {
     });
   });
 
+  test("parses setup mode", () => {
+    const parsed = parseCliArgs(["setup"]);
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("setup");
+    expect(parsed.reset).toBeFalse();
+  });
+
+  test("parses setup reset mode", () => {
+    const parsed = parseCliArgs(["setup", "--reset"]);
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("setup");
+    expect(parsed.reset).toBeTrue();
+  });
+
   test("rejects invalid airport code", () => {
     expect(() =>
       parseCliArgs(["flights", "--from", "SF", "--to", "JFK", "--date", "2099-03-20"]),
@@ -138,8 +152,12 @@ describe("parseCliArgs", () => {
 
   test("rejects command without subcommand", () => {
     expect(() => parseCliArgs(["--from", "SFO", "--to", "JFK", "--date", "2099-03-20"])).toThrow(
-      "Missing subcommand: use `flights` or `hotels`",
+      "Missing subcommand: use `setup`, `flights`, or `hotels`",
     );
+  });
+
+  test("rejects unknown setup argument", () => {
+    expect(() => parseCliArgs(["setup", "--bad"])).toThrow("Unknown argument for setup");
   });
 
   test("rejects invalid hotel rating", () => {

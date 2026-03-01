@@ -19,7 +19,18 @@ bun link
 
 ## Setup
 
-Set API key by environment variable (preferred):
+First run:
+
+```bash
+wayfinder setup
+```
+
+This interactive command explains why the key is needed, where to get it, and saves it to your local config.
+SerpApi is the API provider wayfinder uses to fetch Google Flights and Google Hotels results.
+
+Advanced alternatives:
+
+Set API key by environment variable:
 
 ```bash
 export SERPAPI_API_KEY="your_key"

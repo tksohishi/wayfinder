@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { runWayfinder } from "../src/cli";
 import { ExitCode } from "../src/types";
+import { mkdtempSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 describe("runWayfinder", () => {
   test("runs flight search with exclude basic filter", async () => {
@@ -304,5 +307,114 @@ describe("runWayfinder", () => {
     expect(code).toBe(ExitCode.NoResults);
     expect(stdout).toHaveLength(0);
     expect(stderr[0]).toContain("No hotels found");
+  });
+
+  test("runs setup and writes config file", async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), "wayfinder-setup-"));
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const code = await runWayfinder(["setup"], {
+      homeDir,
+      isInteractive: true,
+      promptImpl: async (message: string) => {
+        if (message.includes("Enter your SerpApi API key")) {
+          return "abc123";
+        }
+        return "y";
+      },
+      output: {
+        stdout: (value: string) => stdout.push(value),
+        stderr: (value: string) => stderr.push(value),
+      },
+    });
+
+    const saved = JSON.parse(
+      readFileSync(path.join(homeDir, ".config", "wayfinder", "config.json"), "utf8"),
+    ) as { serpApiKey: string };
+
+    expect(code).toBe(ExitCode.Success);
+    expect(stderr).toHaveLength(0);
+    expect(saved.serpApiKey).toBe("abc123");
+    expect(stdout.join("\n")).toContain("Setup complete");
+  });
+
+  test("auto-runs setup on bare command when missing key in interactive mode", async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), "wayfinder-bare-"));
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const code = await runWayfinder([], {
+      homeDir,
+      isInteractive: true,
+      promptImpl: async () => "abc123",
+      output: {
+        stdout: (value: string) => stdout.push(value),
+        stderr: (value: string) => stderr.push(value),
+      },
+    });
+
+    expect(code).toBe(ExitCode.Success);
+    expect(stderr).toHaveLength(0);
+    expect(stdout.join("\n")).toContain("Wayfinder needs a SerpApi API key");
+  });
+
+  test("bare command in non-interactive mode prints actionable missing key message", async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), "wayfinder-non-interactive-"));
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const code = await runWayfinder([], {
+      homeDir,
+      isInteractive: false,
+      output: {
+        stdout: (value: string) => stdout.push(value),
+        stderr: (value: string) => stderr.push(value),
+      },
+    });
+
+    expect(code).toBe(ExitCode.MissingApiKey);
+    expect(stdout).toHaveLength(0);
+    expect(stderr[0]).toContain("Missing SerpApi API key");
+    expect(stderr[0]).toContain("wayfinder setup");
+  });
+
+  test("setup reset overwrites existing key without confirmation prompt", async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), "wayfinder-setup-reset-"));
+    const configDir = path.join(homeDir, ".config", "wayfinder");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(
+      path.join(configDir, "config.json"),
+      `${JSON.stringify({ serpApiKey: "old-key" }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const code = await runWayfinder(["setup", "--reset"], {
+      homeDir,
+      isInteractive: true,
+      promptImpl: async (message: string) => {
+        if (message.includes("Overwrite")) {
+          throw new Error("overwrite prompt should not be called for --reset");
+        }
+        return "new-key";
+      },
+      output: {
+        stdout: (value: string) => stdout.push(value),
+        stderr: (value: string) => stderr.push(value),
+      },
+    });
+
+    const saved = JSON.parse(
+      readFileSync(path.join(homeDir, ".config", "wayfinder", "config.json"), "utf8"),
+    ) as { serpApiKey: string };
+
+    expect(code).toBe(ExitCode.Success);
+    expect(stderr).toHaveLength(0);
+    expect(saved.serpApiKey).toBe("new-key");
+    expect(stdout.join("\n")).toContain("Existing config removed due to --reset.");
+    expect(stdout.join("\n")).toContain("Setup complete");
   });
 });

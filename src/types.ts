@@ -63,11 +63,19 @@ export interface ParsedArgsFlightBooking {
   query: FlightBookingQuery;
 }
 
+export interface ParsedArgsSetup {
+  help: false;
+  mode: "setup";
+  outputJson: boolean;
+  reset: boolean;
+}
+
 export type ParsedArgs =
   | ParsedArgsHelp
   | ParsedArgsFlights
   | ParsedArgsHotels
-  | ParsedArgsFlightBooking;
+  | ParsedArgsFlightBooking
+  | ParsedArgsSetup;
 
 export interface FlightOption {
   price: number;
