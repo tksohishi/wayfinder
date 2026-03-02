@@ -6,6 +6,7 @@ import {
   HotelQuery,
   ParsedArgs,
   PlaceQuery,
+  PlaceRange,
   PlaceType,
 } from "./types";
 
@@ -47,6 +48,7 @@ interface PlaceRawOptions {
   near?: string;
   type?: string;
   limit?: string;
+  range?: string;
   outputJson: boolean;
   help: boolean;
 }
@@ -339,6 +341,9 @@ function parsePlacesArgs(args: string[]): ParsedArgs {
       case "--limit":
         raw.limit = value;
         break;
+      case "--range":
+        raw.range = value;
+        break;
       default:
         throw new CliError(`Unknown flag: ${token}`, ExitCode.InvalidInput);
     }
@@ -497,11 +502,13 @@ function buildPlaceQuery(raw: PlaceRawOptions): PlaceQuery {
   const near = normalizeLocation(raw.near);
   const type = raw.type ? normalizePlaceType(raw.type) : "restaurant";
   const limit = raw.limit ? normalizeLimit(raw.limit, "--limit") : 10;
+  const range = raw.range ? normalizePlaceRange(raw.range) : undefined;
 
   return {
     near,
     type,
     limit,
+    range,
   };
 }
 
@@ -653,6 +660,15 @@ function normalizePlaceType(value: string): PlaceType {
   const normalized = value.trim().toLowerCase();
   if (normalized !== "restaurant" && normalized !== "coffee") {
     throw new CliError("--type must be one of: restaurant, coffee", ExitCode.InvalidInput);
+  }
+
+  return normalized;
+}
+
+function normalizePlaceRange(value: string): PlaceRange {
+  const normalized = value.trim().toLowerCase();
+  if (normalized !== "walk") {
+    throw new CliError("--range must be: walk", ExitCode.InvalidInput);
   }
 
   return normalized;

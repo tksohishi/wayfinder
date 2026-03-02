@@ -31,11 +31,13 @@ export interface HotelQuery {
 }
 
 export type PlaceType = "restaurant" | "coffee";
+export type PlaceRange = "walk";
 
 export interface PlaceQuery {
   near: string;
   type: PlaceType;
   limit: number;
+  range?: PlaceRange;
 }
 
 export interface ParsedArgsHelp {

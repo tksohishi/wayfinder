@@ -354,6 +354,8 @@ describe("runWayfinder", () => {
         "Shinjuku, Tokyo",
         "--type",
         "coffee",
+        "--range",
+        "walk",
         "--limit",
         "1",
         "--json",
@@ -373,14 +375,16 @@ describe("runWayfinder", () => {
     expect(requestedUrl).toContain("engine=google_maps");
     expect(requestedUrl).toContain("type=search");
     expect(requestedUrl).toContain("coffee");
+    expect(requestedUrl).toContain("walking");
     const payload = JSON.parse(stdout[0] as string) as {
-      query: { near: string; type: string; limit: number };
+      query: { near: string; type: string; limit: number; range?: string };
       results: Array<{ name: string }>;
     };
 
     expect(payload.query.near).toBe("Shinjuku, Tokyo");
     expect(payload.query.type).toBe("coffee");
     expect(payload.query.limit).toBe(1);
+    expect(payload.query.range).toBe("walk");
     expect(payload.results).toHaveLength(1);
   });
 

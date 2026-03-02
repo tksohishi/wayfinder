@@ -22,7 +22,7 @@ interface RunOptions {
   promptImpl?: (prompt: string) => Promise<string>;
 }
 
-const HELP_TEXT = `wayfinder v0.3.0 travel search
+const HELP_TEXT = `wayfinder v0.3.1 travel search
 
 Usage:
   wayfinder setup [--reset]
@@ -30,7 +30,7 @@ Usage:
   wayfinder flights one-way --from SFO --to JFK --date 2026-03-21 [filters]
   wayfinder flights booking --from SFO --to JFK --date 2026-03-21 --token <BOOKING_TOKEN> [--token <BOOKING_TOKEN>] [--json]
   wayfinder hotels --where "New York, NY" --check-in 2026-03-21 --check-out 2026-03-23 [filters]
-  wayfinder places --near "Shinjuku, Tokyo" [--type restaurant|coffee] [--limit N] [--json]
+  wayfinder places --near "Shinjuku, Tokyo" [--type restaurant|coffee] [--range walk] [--limit N] [--json]
 
 Setup:
   Runs interactive key setup and stores your SerpApi key in local config.
@@ -72,6 +72,7 @@ Places required:
 
 Places optional filters:
   --type <restaurant|coffee> Place type (default restaurant)
+  --range <walk>            Heuristic nearby scope; "walk" narrows to walking-distance intent
   --limit <N>               Maximum number of results (default 10)
 
 Output:

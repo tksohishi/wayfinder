@@ -118,6 +118,12 @@ Search nearby coffee spots:
 wayfinder places --near "Shinjuku, Tokyo" --type coffee --limit 5
 ```
 
+Narrow results to walking-distance intent:
+
+```bash
+wayfinder places --near "Domino Park, Brooklyn, NY" --range walk
+```
+
 Structured places output for scripting:
 
 ```bash

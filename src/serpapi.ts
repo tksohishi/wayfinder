@@ -387,10 +387,11 @@ function buildHotelRequestUrl(query: HotelQuery, apiKey: string): string {
 function buildPlaceRequestUrl(query: PlaceQuery, apiKey: string): string {
   const url = new URL("https://serpapi.com/search.json");
   const searchTerm = query.type === "coffee" ? "coffee" : "restaurants";
+  const rangePrefix = query.range === "walk" ? "within walking distance " : "";
 
   url.searchParams.set("engine", "google_maps");
   url.searchParams.set("type", "search");
-  url.searchParams.set("q", `${searchTerm} near ${query.near}`);
+  url.searchParams.set("q", `${rangePrefix}${searchTerm} near ${query.near}`);
   url.searchParams.set("api_key", apiKey);
   return url.toString();
 }

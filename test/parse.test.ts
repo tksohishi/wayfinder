@@ -148,6 +148,20 @@ describe("parseCliArgs", () => {
     });
   });
 
+  test("parses places args with walk range", () => {
+    const parsed = parseCliArgs([
+      "places",
+      "--near",
+      "Domino Park, Brooklyn, NY",
+      "--range",
+      "walk",
+    ]);
+
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("places");
+    expect(parsed.query.range).toBe("walk");
+  });
+
   test("parses setup mode", () => {
     const parsed = parseCliArgs(["setup"]);
     expect(parsed.help).toBeFalse();
@@ -243,6 +257,12 @@ describe("parseCliArgs", () => {
   test("rejects invalid places limit", () => {
     expect(() => parseCliArgs(["places", "--near", "Tokyo", "--limit", "0"])).toThrow(
       "--limit must be a positive integer",
+    );
+  });
+
+  test("rejects invalid places range", () => {
+    expect(() => parseCliArgs(["places", "--near", "Tokyo", "--range", "drive"])).toThrow(
+      "--range must be: walk",
     );
   });
 });
