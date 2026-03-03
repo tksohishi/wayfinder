@@ -59,6 +59,36 @@ describe("parseCliArgs", () => {
     expect(parsed.query.destination).toBe("SEA");
   });
 
+  test("parses repeated flight dates as multi-date query", () => {
+    const parsed = parseCliArgs([
+      "flights",
+      "--from",
+      "SFO",
+      "--to",
+      "JFK",
+      "--date",
+      "2099-03-20",
+      "--date",
+      "2099-03-21",
+      "--date",
+      "2099-03-20",
+    ]);
+
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("flights");
+    expect(parsed.query).toEqual({
+      origin: "SFO",
+      destination: "JFK",
+      departureDates: ["2099-03-20", "2099-03-21"],
+      airlineCode: undefined,
+      maxStops: undefined,
+      maxPrice: undefined,
+      departureAfterMinutes: undefined,
+      departureBeforeMinutes: undefined,
+      excludeBasic: undefined,
+    });
+  });
+
   test("parses hotels args and defaults adults to 2", () => {
     const parsed = parseCliArgs([
       "hotels",
@@ -242,6 +272,26 @@ describe("parseCliArgs", () => {
     expect(() => parseCliArgs(["flights", "booking"])).toThrow(
       "Missing required flags: --from, --to, --date",
     );
+  });
+
+  test("rejects more than three unique flight dates", () => {
+    expect(() =>
+      parseCliArgs([
+        "flights",
+        "--from",
+        "SFO",
+        "--to",
+        "JFK",
+        "--date",
+        "2099-03-20",
+        "--date",
+        "2099-03-21",
+        "--date",
+        "2099-03-22",
+        "--date",
+        "2099-03-23",
+      ]),
+    ).toThrow("Too many dates: maximum 3 unique --date values per search");
   });
 
   test("rejects places command without near flag", () => {

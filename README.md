@@ -58,6 +58,12 @@ Search one way flights:
 wayfinder flights --from SFO --to JFK --date 2026-04-10
 ```
 
+Search up to 3 departure dates in one command:
+
+```bash
+wayfinder flights --from SFO --to JFK --date 2026-04-10 --date 2026-04-11 --date 2026-04-13
+```
+
 Search with filters:
 
 ```bash

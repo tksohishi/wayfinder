@@ -1,8 +1,11 @@
 import { CliError } from "./errors";
 import {
   ExitCode,
+  FlightDateResult,
   FlightBookingQuery,
   FlightBookingResult,
+  FlightMultiDateQuery,
+  FlightMultiDateSearchResult,
   FlightOption,
   FlightQuery,
   FlightSearchResult,
@@ -131,6 +134,38 @@ export async function searchFlights(
   return {
     options: flights,
     googleFlightsUrl: payload.search_metadata?.google_flights_url,
+  };
+}
+
+export async function searchFlightsMultiDate(
+  query: FlightMultiDateQuery,
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<FlightMultiDateSearchResult> {
+  const resultsByDate = await mapWithConcurrency(query.departureDates, 2, async (date) => {
+    const singleDateQuery: FlightQuery = {
+      origin: query.origin,
+      destination: query.destination,
+      departureDate: date,
+      airlineCode: query.airlineCode,
+      maxStops: query.maxStops,
+      maxPrice: query.maxPrice,
+      departureAfterMinutes: query.departureAfterMinutes,
+      departureBeforeMinutes: query.departureBeforeMinutes,
+      excludeBasic: query.excludeBasic,
+    };
+
+    const result = await searchFlights(singleDateQuery, apiKey, fetchImpl);
+    const grouped: FlightDateResult = {
+      date,
+      results: result.options,
+      googleFlightsUrl: result.googleFlightsUrl,
+    };
+    return grouped;
+  });
+
+  return {
+    resultsByDate,
   };
 }
 
@@ -684,4 +719,34 @@ function collectBookingLinks(
   for (const child of Object.values(value)) {
     collectBookingLinks(child, links);
   }
+}
+
+async function mapWithConcurrency<TInput, TOutput>(
+  items: TInput[],
+  concurrency: number,
+  worker: (item: TInput, index: number) => Promise<TOutput>,
+): Promise<TOutput[]> {
+  const output: TOutput[] = new Array(items.length);
+  let cursor = 0;
+
+  async function runWorker(): Promise<void> {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+
+      if (index >= items.length) {
+        return;
+      }
+
+      output[index] = await worker(items[index] as TInput, index);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(Math.max(concurrency, 1), items.length) },
+    () => runWorker(),
+  );
+
+  await Promise.all(workers);
+  return output;
 }

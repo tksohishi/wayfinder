@@ -197,6 +197,132 @@ describe("runWayfinder", () => {
     expect(payload.results[1]?.googleFlightsUrl).toContain("google.com/travel/flights/search");
   });
 
+  test("runs multi-date flight search and groups json output by date", async () => {
+    const urls: string[] = [];
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      urls.push(url);
+      const date = new URL(url).searchParams.get("outbound_date");
+      const hour = date === "2099-03-21" ? "10:00" : "08:00";
+      const price = date === "2099-03-21" ? 220 : 200;
+
+      return new Response(
+        JSON.stringify({
+          search_metadata: {
+            google_flights_url: `https://www.google.com/travel/flights/search?tfs=${date}`,
+          },
+          best_flights: [
+            {
+              price,
+              booking_token: `token-${date}`,
+              flights: [
+                {
+                  airline: "Delta",
+                  duration: 360,
+                  departure_airport: { time: `${date} ${hour}` },
+                  arrival_airport: { time: `${date} 14:00` },
+                },
+              ],
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      );
+    };
+
+    const code = await runWayfinder(
+      [
+        "flights",
+        "--from",
+        "SFO",
+        "--to",
+        "JFK",
+        "--date",
+        "2099-03-20",
+        "--date",
+        "2099-03-21",
+        "--date",
+        "2099-03-20",
+        "--json",
+      ],
+      {
+        env: { SERPAPI_API_KEY: "test-key" },
+        fetchImpl,
+        output: {
+          stdout: (value: string) => stdout.push(value),
+          stderr: (value: string) => stderr.push(value),
+        },
+      },
+    );
+
+    expect(code).toBe(ExitCode.Success);
+    expect(stderr).toHaveLength(0);
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toContain("outbound_date=2099-03-20");
+    expect(urls[1]).toContain("outbound_date=2099-03-21");
+
+    const payload = JSON.parse(stdout[0] as string) as {
+      query: { departureDates: string[] };
+      resultsByDate: Array<{ date: string; results: Array<{ departureTime: string }> }>;
+    };
+    expect(payload.query.departureDates).toEqual(["2099-03-20", "2099-03-21"]);
+    expect(payload.resultsByDate).toHaveLength(2);
+    expect(payload.resultsByDate[0]?.date).toBe("2099-03-20");
+    expect(payload.resultsByDate[1]?.date).toBe("2099-03-21");
+    expect(payload.resultsByDate[0]?.results[0]?.departureTime).toBe("2099-03-20 08:00");
+    expect(payload.resultsByDate[1]?.results[0]?.departureTime).toBe("2099-03-21 10:00");
+  });
+
+  test("returns invalid input when more than three unique dates are provided", async () => {
+    let fetchCalled = false;
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const fetchImpl: typeof fetch = async () => {
+      fetchCalled = true;
+      throw new Error("fetch should not be called");
+    };
+
+    const code = await runWayfinder(
+      [
+        "flights",
+        "--from",
+        "SFO",
+        "--to",
+        "JFK",
+        "--date",
+        "2099-03-20",
+        "--date",
+        "2099-03-21",
+        "--date",
+        "2099-03-22",
+        "--date",
+        "2099-03-23",
+      ],
+      {
+        env: { SERPAPI_API_KEY: "test-key" },
+        fetchImpl,
+        output: {
+          stdout: (value: string) => stdout.push(value),
+          stderr: (value: string) => stderr.push(value),
+        },
+      },
+    );
+
+    expect(code).toBe(ExitCode.InvalidInput);
+    expect(fetchCalled).toBeFalse();
+    expect(stdout).toHaveLength(0);
+    expect(stderr[0]).toBe("Too many dates: maximum 3 unique --date values per search");
+  });
+
   test("runs hotel search with json output", async () => {
     let requestedUrl = "";
     const stdout: string[] = [];

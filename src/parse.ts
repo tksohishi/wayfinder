@@ -2,7 +2,7 @@ import { CliError } from "./errors";
 import {
   ExitCode,
   FlightBookingQuery,
-  FlightQuery,
+  FlightsQuery,
   HotelQuery,
   ParsedArgs,
   PlaceQuery,
@@ -13,7 +13,7 @@ import {
 interface FlightRawOptions {
   from?: string;
   to?: string;
-  date?: string;
+  dates: string[];
   airline?: string;
   maxStops?: string;
   maxPrice?: string;
@@ -88,6 +88,7 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
 
 function parseFlightsArgs(args: string[]): ParsedArgs {
   const raw: FlightRawOptions = {
+    dates: [],
     excludeBasic: false,
     outputJson: false,
     help: false,
@@ -128,7 +129,7 @@ function parseFlightsArgs(args: string[]): ParsedArgs {
         raw.to = value;
         break;
       case "--date":
-        raw.date = value;
+        raw.dates.push(value);
         break;
       case "--airline":
         raw.airline = value;
@@ -382,8 +383,8 @@ function parseSetupArgs(args: string[]): ParsedArgs {
   };
 }
 
-function buildFlightQuery(raw: FlightRawOptions): FlightQuery {
-  if (!raw.from || !raw.to || !raw.date) {
+function buildFlightQuery(raw: FlightRawOptions): FlightsQuery {
+  if (!raw.from || !raw.to || raw.dates.length === 0) {
     throw new CliError("Missing required flags: --from, --to, --date", ExitCode.InvalidInput);
   }
 
@@ -394,7 +395,14 @@ function buildFlightQuery(raw: FlightRawOptions): FlightQuery {
     throw new CliError("Origin and destination must be different airports", ExitCode.InvalidInput);
   }
 
-  const departureDate = normalizeDate(raw.date, "departure");
+  const departureDates = [...new Set(raw.dates.map((date) => normalizeDate(date, "departure")))];
+  if (departureDates.length > 3) {
+    throw new CliError(
+      "Too many dates: maximum 3 unique --date values per search",
+      ExitCode.InvalidInput,
+    );
+  }
+
   const airlineCode = raw.airline ? normalizeAirlineCode(raw.airline) : undefined;
   const maxStops = raw.maxStops ? normalizeMaxStops(raw.maxStops) : undefined;
   const maxPrice = raw.maxPrice ? normalizeMaxPrice(raw.maxPrice) : undefined;
@@ -424,16 +432,27 @@ function buildFlightQuery(raw: FlightRawOptions): FlightQuery {
     }
   }
 
-  return {
+  const shared = {
     origin,
     destination,
-    departureDate,
     airlineCode,
     maxStops,
     maxPrice,
     departureAfterMinutes,
     departureBeforeMinutes,
     excludeBasic: raw.excludeBasic || undefined,
+  };
+
+  if (departureDates.length === 1) {
+    return {
+      ...shared,
+      departureDate: departureDates[0] as string,
+    };
+  }
+
+  return {
+    ...shared,
+    departureDates,
   };
 }
 

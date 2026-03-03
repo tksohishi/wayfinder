@@ -21,6 +21,20 @@ export interface FlightQuery {
   excludeBasic?: boolean;
 }
 
+export interface FlightMultiDateQuery {
+  origin: string;
+  destination: string;
+  departureDates: string[];
+  airlineCode?: string;
+  maxStops?: number;
+  maxPrice?: number;
+  departureAfterMinutes?: number;
+  departureBeforeMinutes?: number;
+  excludeBasic?: boolean;
+}
+
+export type FlightsQuery = FlightQuery | FlightMultiDateQuery;
+
 export interface HotelQuery {
   location: string;
   checkInDate: string;
@@ -49,7 +63,7 @@ export interface ParsedArgsFlights {
   help: false;
   mode: "flights";
   outputJson: boolean;
-  query: FlightQuery;
+  query: FlightsQuery;
 }
 
 export interface ParsedArgsHotels {
@@ -131,6 +145,16 @@ export interface PlaceOption {
 export interface FlightSearchResult {
   options: FlightOption[];
   googleFlightsUrl?: string;
+}
+
+export interface FlightDateResult {
+  date: string;
+  results: FlightOption[];
+  googleFlightsUrl?: string;
+}
+
+export interface FlightMultiDateSearchResult {
+  resultsByDate: FlightDateResult[];
 }
 
 export interface FlightBookingLink {

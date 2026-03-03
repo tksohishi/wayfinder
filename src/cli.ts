@@ -1,9 +1,9 @@
 import { getConfigPath, readConfigApiKey, resolveApiKey, writeConfigApiKey } from "./config";
 import { CliError } from "./errors";
-import { renderFlightTable, renderHotelTable, renderPlaceTable } from "./format";
+import { renderFlightTable, renderFlightTablesByDate, renderHotelTable, renderPlaceTable } from "./format";
 import { parseCliArgs } from "./parse";
-import { searchFlightBookingOptions, searchFlights, searchHotels, searchPlaces } from "./serpapi";
-import { ExitCode } from "./types";
+import { searchFlightBookingOptions, searchFlights, searchFlightsMultiDate, searchHotels, searchPlaces } from "./serpapi";
+import { ExitCode, FlightMultiDateQuery, FlightsQuery } from "./types";
 import { createInterface } from "node:readline/promises";
 import { stdin as defaultStdin, stdout as defaultStdout } from "node:process";
 import { existsSync, unlinkSync } from "node:fs";
@@ -22,7 +22,7 @@ interface RunOptions {
   promptImpl?: (prompt: string) => Promise<string>;
 }
 
-const HELP_TEXT = `wayfinder v0.3.1 travel search
+const HELP_TEXT = `wayfinder v0.4.0 travel search
 
 Usage:
   wayfinder setup [--reset]
@@ -39,7 +39,7 @@ Setup:
 Flights required:
   --from <IATA>             Origin airport code
   --to <IATA>               Destination airport code
-  --date <YYYY-MM-DD>       Departure date
+  --date <YYYY-MM-DD>       Departure date (repeat up to 3 unique dates)
 
 Flights optional filters:
   --airline <IATA>          Airline code, example UA
@@ -135,26 +135,50 @@ export async function runWayfinder(
 
     const apiKey = resolveApiKey(env, homeDir);
     if (parsed.mode === "flights") {
-      const flights = await searchFlights(parsed.query, apiKey, options.fetchImpl ?? fetch);
+      if (isMultiDateFlightQuery(parsed.query)) {
+        const multiDateFlights = await searchFlightsMultiDate(parsed.query, apiKey, options.fetchImpl ?? fetch);
+        const nonEmptyDateResults = multiDateFlights.resultsByDate.filter((entry) => entry.results.length > 0);
 
-      if (flights.options.length === 0) {
-        throw new CliError("No flights found for the selected query", ExitCode.NoResults);
-      }
+        if (nonEmptyDateResults.length === 0) {
+          throw new CliError("No flights found for the selected query", ExitCode.NoResults);
+        }
 
-      if (parsed.outputJson) {
-        output.stdout(
-          JSON.stringify(
-            {
-              query: parsed.query,
-              googleFlightsUrl: flights.googleFlightsUrl,
-              results: flights.options,
-            },
-            null,
-            2,
-          ),
-        );
+        if (parsed.outputJson) {
+          output.stdout(
+            JSON.stringify(
+              {
+                query: parsed.query,
+                resultsByDate: nonEmptyDateResults,
+              },
+              null,
+              2,
+            ),
+          );
+        } else {
+          output.stdout(renderFlightTablesByDate(nonEmptyDateResults));
+        }
       } else {
-        output.stdout(renderFlightTable(flights.options));
+        const flights = await searchFlights(parsed.query, apiKey, options.fetchImpl ?? fetch);
+
+        if (flights.options.length === 0) {
+          throw new CliError("No flights found for the selected query", ExitCode.NoResults);
+        }
+
+        if (parsed.outputJson) {
+          output.stdout(
+            JSON.stringify(
+              {
+                query: parsed.query,
+                googleFlightsUrl: flights.googleFlightsUrl,
+                results: flights.options,
+              },
+              null,
+              2,
+            ),
+          );
+        } else {
+          output.stdout(renderFlightTable(flights.options));
+        }
       }
     } else if (parsed.mode === "flight-booking") {
       const bookingResults = await searchFlightBookingOptions(
@@ -339,4 +363,8 @@ async function promptWithFallback(
   } finally {
     rl.close();
   }
+}
+
+function isMultiDateFlightQuery(query: FlightsQuery): query is FlightMultiDateQuery {
+  return "departureDates" in query;
 }

@@ -1,4 +1,4 @@
-import { FlightOption, HotelOption, PlaceOption } from "./types";
+import { FlightDateResult, FlightOption, HotelOption, PlaceOption } from "./types";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -72,6 +72,19 @@ export function renderFlightTable(options: FlightOption[]): string {
   }
 
   return lines.join("\n");
+}
+
+export function renderFlightTablesByDate(resultsByDate: FlightDateResult[]): string {
+  const sections = resultsByDate.map((result) => {
+    const lines = [`DATE: ${result.date}`];
+    if (typeof result.googleFlightsUrl === "string") {
+      lines.push(`GOOGLE FLIGHTS: ${result.googleFlightsUrl}`);
+    }
+    lines.push(renderFlightTable(result.results));
+    return lines.join("\n");
+  });
+
+  return sections.join("\n\n");
 }
 
 export function renderHotelTable(options: HotelOption[]): string {
