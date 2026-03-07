@@ -63,6 +63,10 @@ Hotels required:
 
 Hotels optional filters:
   --adults <N>              Number of adults (default 2)
+  --children <N>            Number of children
+  --children-ages <A,B>     Child ages, comma-separated, example 4,7
+  --free-cancellation       Only show hotels with free cancellation
+  --hotel-class <A,B>       Hotel star class, comma-separated: 2,3,4,5
   --max-price <USD>         Max nightly rate in USD
   --rating <3.5|4|4.5|5>    Minimum guest rating
 

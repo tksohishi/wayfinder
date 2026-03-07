@@ -387,15 +387,100 @@ describe("runWayfinder", () => {
     expect(code).toBe(ExitCode.Success);
     expect(stderr).toHaveLength(0);
     expect(requestedUrl).toContain("engine=google_hotels");
+    expect(requestedUrl).toContain("children=0");
     expect(requestedUrl).toContain("rating=9");
     const payload = JSON.parse(stdout[0] as string) as {
-      query: { location: string };
+      query: { location: string; children: number };
       results: Array<{ name: string; nightlyPrice: number }>;
     };
 
     expect(payload.query.location).toBe("Seattle, WA");
+    expect(payload.query.children).toBe(0);
     expect(payload.results[0]?.name).toBe("Hotel One");
     expect(payload.results[1]?.name).toBe("Hotel Two");
+  });
+
+  test("runs hotel search with family and cancellation filters", async () => {
+    let requestedUrl = "";
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const fetchImpl: typeof fetch = async (input) => {
+      requestedUrl = String(input);
+
+      return new Response(
+        JSON.stringify({
+          properties: [
+            {
+              name: "Hotel Family",
+              rate_per_night: { lowest: 240 },
+              total_rate: { lowest: 720 },
+              overall_rating: 4.7,
+              reviews: 410,
+              description: "Central",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      );
+    };
+
+    const code = await runWayfinder(
+      [
+        "hotels",
+        "--where",
+        "Tokyo",
+        "--check-in",
+        "2099-04-10",
+        "--check-out",
+        "2099-04-13",
+        "--adults",
+        "2",
+        "--children",
+        "2",
+        "--children-ages",
+        "4,7",
+        "--free-cancellation",
+        "--hotel-class",
+        "5,4,4",
+        "--json",
+      ],
+      {
+        env: { SERPAPI_API_KEY: "test-key" },
+        fetchImpl,
+        output: {
+          stdout: (value: string) => stdout.push(value),
+          stderr: (value: string) => stderr.push(value),
+        },
+      },
+    );
+
+    expect(code).toBe(ExitCode.Success);
+    expect(stderr).toHaveLength(0);
+    expect(requestedUrl).toContain("children=2");
+    expect(requestedUrl).toContain("children_ages=4%2C7");
+    expect(requestedUrl).toContain("free_cancellation=true");
+    expect(requestedUrl).toContain("hotel_class=4%2C5");
+    const payload = JSON.parse(stdout[0] as string) as {
+      query: {
+        children: number;
+        childrenAges?: number[];
+        freeCancellation?: boolean;
+        hotelClasses?: number[];
+      };
+      results: Array<{ name: string }>;
+    };
+
+    expect(payload.query.children).toBe(2);
+    expect(payload.query.childrenAges).toEqual([4, 7]);
+    expect(payload.query.freeCancellation).toBeTrue();
+    expect(payload.query.hotelClasses).toEqual([4, 5]);
+    expect(payload.results[0]?.name).toBe("Hotel Family");
   });
 
   test("returns no results exit code when hotel properties are empty", async () => {

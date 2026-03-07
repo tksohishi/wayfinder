@@ -35,11 +35,17 @@ export interface FlightMultiDateQuery {
 
 export type FlightsQuery = FlightQuery | FlightMultiDateQuery;
 
+export type HotelClass = 2 | 3 | 4 | 5;
+
 export interface HotelQuery {
   location: string;
   checkInDate: string;
   checkOutDate: string;
   adults: number;
+  children: number;
+  childrenAges?: number[];
+  freeCancellation?: boolean;
+  hotelClasses?: HotelClass[];
   maxPrice?: number;
   minRating?: 3.5 | 4 | 4.5 | 5;
 }

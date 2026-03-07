@@ -3,6 +3,7 @@ import {
   ExitCode,
   FlightBookingQuery,
   FlightsQuery,
+  HotelClass,
   HotelQuery,
   ParsedArgs,
   PlaceQuery,
@@ -29,6 +30,10 @@ interface HotelRawOptions {
   checkIn?: string;
   checkOut?: string;
   adults?: string;
+  children?: string;
+  childrenAges?: string;
+  freeCancellation: boolean;
+  hotelClass?: string;
   maxPrice?: string;
   rating?: string;
   outputJson: boolean;
@@ -170,6 +175,7 @@ function parseFlightsArgs(args: string[]): ParsedArgs {
 
 function parseHotelsArgs(args: string[]): ParsedArgs {
   const raw: HotelRawOptions = {
+    freeCancellation: false,
     outputJson: false,
     help: false,
   };
@@ -184,6 +190,11 @@ function parseHotelsArgs(args: string[]): ParsedArgs {
 
     if (token === "--json") {
       raw.outputJson = true;
+      continue;
+    }
+
+    if (token === "--free-cancellation") {
+      raw.freeCancellation = true;
       continue;
     }
 
@@ -208,6 +219,15 @@ function parseHotelsArgs(args: string[]): ParsedArgs {
         break;
       case "--adults":
         raw.adults = value;
+        break;
+      case "--children":
+        raw.children = value;
+        break;
+      case "--children-ages":
+        raw.childrenAges = value;
+        break;
+      case "--hotel-class":
+        raw.hotelClass = value;
         break;
       case "--max-price":
         raw.maxPrice = value;
@@ -468,6 +488,10 @@ function buildHotelQuery(raw: HotelRawOptions): HotelQuery {
   const checkInDate = normalizeDate(raw.checkIn, "check-in");
   const checkOutDate = normalizeDate(raw.checkOut, "check-out");
   const adults = raw.adults ? normalizeAdults(raw.adults) : 2;
+  const children = raw.children ? normalizeChildren(raw.children) : 0;
+  const childrenAges = raw.childrenAges ? normalizeChildrenAges(raw.childrenAges) : undefined;
+  const freeCancellation = raw.freeCancellation || undefined;
+  const hotelClasses = raw.hotelClass ? normalizeHotelClasses(raw.hotelClass) : undefined;
   const maxPrice = raw.maxPrice ? normalizeMaxPrice(raw.maxPrice) : undefined;
   const minRating = raw.rating ? normalizeMinRating(raw.rating) : undefined;
 
@@ -478,11 +502,26 @@ function buildHotelQuery(raw: HotelRawOptions): HotelQuery {
     throw new CliError("Check-out date must be after check-in date", ExitCode.InvalidInput);
   }
 
+  if (childrenAges && children === 0) {
+    throw new CliError("--children-ages requires --children", ExitCode.InvalidInput);
+  }
+
+  if (childrenAges && childrenAges.length !== children) {
+    throw new CliError(
+      "--children-ages count must match --children",
+      ExitCode.InvalidInput,
+    );
+  }
+
   return {
     location,
     checkInDate,
     checkOutDate,
     adults,
+    children,
+    childrenAges,
+    freeCancellation,
+    hotelClasses,
     maxPrice,
     minRating,
   };
@@ -664,6 +703,62 @@ function normalizeAdults(value: string): number {
   }
 
   return numeric;
+}
+
+function normalizeChildren(value: string): number {
+  if (!/^\d+$/.test(value.trim())) {
+    throw new CliError("--children must be a positive integer", ExitCode.InvalidInput);
+  }
+
+  const numeric = Number.parseInt(value, 10);
+  if (!Number.isInteger(numeric) || numeric <= 0) {
+    throw new CliError("--children must be a positive integer", ExitCode.InvalidInput);
+  }
+
+  return numeric;
+}
+
+function normalizeChildrenAges(value: string): number[] {
+  const parts = value.split(",");
+  if (parts.length === 0) {
+    throw new CliError(
+      "--children-ages must be a comma-separated list of ages 1 through 17",
+      ExitCode.InvalidInput,
+    );
+  }
+
+  return parts.map((part) => {
+    const trimmed = part.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      throw new CliError(
+        "--children-ages must be a comma-separated list of ages 1 through 17",
+        ExitCode.InvalidInput,
+      );
+    }
+
+    const age = Number.parseInt(trimmed, 10);
+    if (age < 1 || age > 17) {
+      throw new CliError("--children-ages ages must be between 1 and 17", ExitCode.InvalidInput);
+    }
+
+    return age;
+  });
+}
+
+function normalizeHotelClasses(value: string): HotelClass[] {
+  const hotelClasses = value.split(",").map((part) => {
+    const trimmed = part.trim();
+    if (trimmed !== "2" && trimmed !== "3" && trimmed !== "4" && trimmed !== "5") {
+      throw new CliError(
+        "--hotel-class must be a comma-separated list of: 2, 3, 4, 5",
+        ExitCode.InvalidInput,
+      );
+    }
+
+    return Number.parseInt(trimmed, 10) as HotelClass;
+  });
+
+  return [...new Set(hotelClasses)].sort((a, b) => a - b);
 }
 
 function normalizeMinRating(value: string): 3.5 | 4 | 4.5 | 5 {

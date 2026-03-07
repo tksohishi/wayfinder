@@ -111,8 +111,48 @@ describe("parseCliArgs", () => {
       checkInDate: "2099-04-10",
       checkOutDate: "2099-04-12",
       adults: 2,
+      children: 0,
+      childrenAges: undefined,
+      freeCancellation: undefined,
+      hotelClasses: undefined,
       maxPrice: 350,
       minRating: 4.5,
+    });
+  });
+
+  test("parses hotels args with family and class filters", () => {
+    const parsed = parseCliArgs([
+      "hotels",
+      "--where",
+      "Tokyo",
+      "--check-in",
+      "2099-04-10",
+      "--check-out",
+      "2099-04-13",
+      "--adults",
+      "2",
+      "--children",
+      "2",
+      "--children-ages",
+      "7,4",
+      "--free-cancellation",
+      "--hotel-class",
+      "5,4,4",
+    ]);
+
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("hotels");
+    expect(parsed.query).toEqual({
+      location: "Tokyo",
+      checkInDate: "2099-04-10",
+      checkOutDate: "2099-04-13",
+      adults: 2,
+      children: 2,
+      childrenAges: [7, 4],
+      freeCancellation: true,
+      hotelClasses: [4, 5],
+      maxPrice: undefined,
+      minRating: undefined,
     });
   });
 
@@ -252,6 +292,153 @@ describe("parseCliArgs", () => {
         "4.2",
       ]),
     ).toThrow("--rating must be one of: 3.5, 4, 4.5, 5");
+  });
+
+  test("rejects invalid children count", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--children",
+        "0",
+      ]),
+    ).toThrow("--children must be a positive integer");
+  });
+
+  test("rejects missing value for children", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--children",
+      ]),
+    ).toThrow("Missing value for --children");
+  });
+
+  test("rejects invalid children ages format", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--children",
+        "2",
+        "--children-ages",
+        "4,,7",
+      ]),
+    ).toThrow("--children-ages must be a comma-separated list of ages 1 through 17");
+  });
+
+  test("rejects missing value for children ages", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--children-ages",
+      ]),
+    ).toThrow("Missing value for --children-ages");
+  });
+
+  test("rejects children ages outside the supported range", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--children",
+        "1",
+        "--children-ages",
+        "18",
+      ]),
+    ).toThrow("--children-ages ages must be between 1 and 17");
+  });
+
+  test("rejects children ages without children", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--children-ages",
+        "7",
+      ]),
+    ).toThrow("--children-ages requires --children");
+  });
+
+  test("rejects mismatched children age count", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--children",
+        "2",
+        "--children-ages",
+        "7",
+      ]),
+    ).toThrow("--children-ages count must match --children");
+  });
+
+  test("rejects invalid hotel class values", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--hotel-class",
+        "4,6",
+      ]),
+    ).toThrow("--hotel-class must be a comma-separated list of: 2, 3, 4, 5");
+  });
+
+  test("rejects missing value for hotel class", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--hotel-class",
+      ]),
+    ).toThrow("Missing value for --hotel-class");
   });
 
   test("rejects hotel check-out date that is not after check-in", () => {

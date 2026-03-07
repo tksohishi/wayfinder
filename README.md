@@ -100,6 +100,12 @@ Search hotels with filters:
 wayfinder hotels --where "Tokyo" --check-in 2026-04-10 --check-out 2026-04-13 --adults 2 --max-price 300 --rating 4
 ```
 
+Search family-friendly hotels with cancellation and class filters:
+
+```bash
+wayfinder hotels --where "Tokyo" --check-in 2026-04-10 --check-out 2026-04-13 --adults 2 --children 2 --children-ages 4,7 --free-cancellation --hotel-class 4,5
+```
+
 Structured hotel output for scripting:
 
 ```bash

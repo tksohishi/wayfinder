@@ -405,8 +405,21 @@ function buildHotelRequestUrl(query: HotelQuery, apiKey: string): string {
   url.searchParams.set("check_in_date", query.checkInDate);
   url.searchParams.set("check_out_date", query.checkOutDate);
   url.searchParams.set("adults", String(query.adults));
+  url.searchParams.set("children", String(query.children));
   url.searchParams.set("currency", "USD");
   url.searchParams.set("api_key", apiKey);
+
+  if (query.childrenAges && query.childrenAges.length > 0) {
+    url.searchParams.set("children_ages", query.childrenAges.join(","));
+  }
+
+  if (query.freeCancellation) {
+    url.searchParams.set("free_cancellation", "true");
+  }
+
+  if (query.hotelClasses && query.hotelClasses.length > 0) {
+    url.searchParams.set("hotel_class", query.hotelClasses.join(","));
+  }
 
   if (typeof query.maxPrice === "number") {
     url.searchParams.set("max_price", String(query.maxPrice));
