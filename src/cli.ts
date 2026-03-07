@@ -22,7 +22,7 @@ interface RunOptions {
   promptImpl?: (prompt: string) => Promise<string>;
 }
 
-const HELP_TEXT = `wayfinder v0.4.0 travel search
+const HELP_TEXT = `wayfinder travel search
 
 Usage:
   wayfinder setup [--reset]
@@ -67,7 +67,8 @@ Hotels optional filters:
   --children-ages <A,B>     Child ages, comma-separated, example 4,7
   --free-cancellation       Only show hotels with free cancellation
   --hotel-class <A,B>       Hotel star class, comma-separated: 2,3,4,5
-  --max-price <USD>         Max nightly rate in USD
+  --min-price <USD>         Lower price bound in USD
+  --max-price <USD>         Upper price bound in USD
   --rating <3.5|4|4.5|5>    Minimum guest rating
 
 Places required:

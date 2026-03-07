@@ -46,6 +46,7 @@ export interface HotelQuery {
   childrenAges?: number[];
   freeCancellation?: boolean;
   hotelClasses?: HotelClass[];
+  minPrice?: number;
   maxPrice?: number;
   minRating?: 3.5 | 4 | 4.5 | 5;
 }

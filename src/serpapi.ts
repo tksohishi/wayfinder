@@ -421,6 +421,10 @@ function buildHotelRequestUrl(query: HotelQuery, apiKey: string): string {
     url.searchParams.set("hotel_class", query.hotelClasses.join(","));
   }
 
+  if (typeof query.minPrice === "number") {
+    url.searchParams.set("min_price", String(query.minPrice));
+  }
+
   if (typeof query.maxPrice === "number") {
     url.searchParams.set("max_price", String(query.maxPrice));
   }

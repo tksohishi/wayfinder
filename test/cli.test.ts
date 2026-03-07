@@ -370,6 +370,8 @@ describe("runWayfinder", () => {
         "2099-03-20",
         "--check-out",
         "2099-03-22",
+        "--min-price",
+        "150",
         "--rating",
         "4.5",
         "--json",
@@ -388,14 +390,16 @@ describe("runWayfinder", () => {
     expect(stderr).toHaveLength(0);
     expect(requestedUrl).toContain("engine=google_hotels");
     expect(requestedUrl).toContain("children=0");
+    expect(requestedUrl).toContain("min_price=150");
     expect(requestedUrl).toContain("rating=9");
     const payload = JSON.parse(stdout[0] as string) as {
-      query: { location: string; children: number };
+      query: { location: string; children: number; minPrice?: number };
       results: Array<{ name: string; nightlyPrice: number }>;
     };
 
     expect(payload.query.location).toBe("Seattle, WA");
     expect(payload.query.children).toBe(0);
+    expect(payload.query.minPrice).toBe(150);
     expect(payload.results[0]?.name).toBe("Hotel One");
     expect(payload.results[1]?.name).toBe("Hotel Two");
   });
@@ -448,6 +452,10 @@ describe("runWayfinder", () => {
         "--free-cancellation",
         "--hotel-class",
         "5,4,4",
+        "--min-price",
+        "200",
+        "--max-price",
+        "450",
         "--json",
       ],
       {
@@ -466,12 +474,16 @@ describe("runWayfinder", () => {
     expect(requestedUrl).toContain("children_ages=4%2C7");
     expect(requestedUrl).toContain("free_cancellation=true");
     expect(requestedUrl).toContain("hotel_class=4%2C5");
+    expect(requestedUrl).toContain("min_price=200");
+    expect(requestedUrl).toContain("max_price=450");
     const payload = JSON.parse(stdout[0] as string) as {
       query: {
         children: number;
         childrenAges?: number[];
         freeCancellation?: boolean;
         hotelClasses?: number[];
+        minPrice?: number;
+        maxPrice?: number;
       };
       results: Array<{ name: string }>;
     };
@@ -480,6 +492,8 @@ describe("runWayfinder", () => {
     expect(payload.query.childrenAges).toEqual([4, 7]);
     expect(payload.query.freeCancellation).toBeTrue();
     expect(payload.query.hotelClasses).toEqual([4, 5]);
+    expect(payload.query.minPrice).toBe(200);
+    expect(payload.query.maxPrice).toBe(450);
     expect(payload.results[0]?.name).toBe("Hotel Family");
   });
 

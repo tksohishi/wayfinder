@@ -94,10 +94,10 @@ Search hotels:
 wayfinder hotels --where "New York, NY" --check-in 2026-04-10 --check-out 2026-04-12
 ```
 
-Search hotels with filters:
+Search hotels with price and rating filters:
 
 ```bash
-wayfinder hotels --where "Tokyo" --check-in 2026-04-10 --check-out 2026-04-13 --adults 2 --max-price 300 --rating 4
+wayfinder hotels --where "Tokyo" --check-in 2026-04-10 --check-out 2026-04-13 --adults 2 --min-price 120 --max-price 300 --rating 4
 ```
 
 Search family-friendly hotels with cancellation and class filters:

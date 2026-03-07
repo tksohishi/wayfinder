@@ -34,6 +34,7 @@ interface HotelRawOptions {
   childrenAges?: string;
   freeCancellation: boolean;
   hotelClass?: string;
+  minPrice?: string;
   maxPrice?: string;
   rating?: string;
   outputJson: boolean;
@@ -228,6 +229,9 @@ function parseHotelsArgs(args: string[]): ParsedArgs {
         break;
       case "--hotel-class":
         raw.hotelClass = value;
+        break;
+      case "--min-price":
+        raw.minPrice = value;
         break;
       case "--max-price":
         raw.maxPrice = value;
@@ -425,7 +429,7 @@ function buildFlightQuery(raw: FlightRawOptions): FlightsQuery {
 
   const airlineCode = raw.airline ? normalizeAirlineCode(raw.airline) : undefined;
   const maxStops = raw.maxStops ? normalizeMaxStops(raw.maxStops) : undefined;
-  const maxPrice = raw.maxPrice ? normalizeMaxPrice(raw.maxPrice) : undefined;
+  const maxPrice = raw.maxPrice ? normalizePrice(raw.maxPrice, "--max-price") : undefined;
 
   const hasDepartAfter = typeof raw.departAfter === "string";
   const hasDepartBefore = typeof raw.departBefore === "string";
@@ -492,7 +496,8 @@ function buildHotelQuery(raw: HotelRawOptions): HotelQuery {
   const childrenAges = raw.childrenAges ? normalizeChildrenAges(raw.childrenAges) : undefined;
   const freeCancellation = raw.freeCancellation || undefined;
   const hotelClasses = raw.hotelClass ? normalizeHotelClasses(raw.hotelClass) : undefined;
-  const maxPrice = raw.maxPrice ? normalizeMaxPrice(raw.maxPrice) : undefined;
+  const minPrice = raw.minPrice ? normalizePrice(raw.minPrice, "--min-price") : undefined;
+  const maxPrice = raw.maxPrice ? normalizePrice(raw.maxPrice, "--max-price") : undefined;
   const minRating = raw.rating ? normalizeMinRating(raw.rating) : undefined;
 
   const checkIn = parseDateOnly(checkInDate);
@@ -513,6 +518,10 @@ function buildHotelQuery(raw: HotelRawOptions): HotelQuery {
     );
   }
 
+  if (typeof minPrice === "number" && typeof maxPrice === "number" && minPrice > maxPrice) {
+    throw new CliError("--min-price cannot be greater than --max-price", ExitCode.InvalidInput);
+  }
+
   return {
     location,
     checkInDate,
@@ -522,6 +531,7 @@ function buildHotelQuery(raw: HotelRawOptions): HotelQuery {
     childrenAges,
     freeCancellation,
     hotelClasses,
+    minPrice,
     maxPrice,
     minRating,
   };
@@ -679,11 +689,17 @@ function normalizeMaxStops(value: string): number {
   return numeric;
 }
 
-function normalizeMaxPrice(value: string): number {
-  const numeric = Number.parseInt(value, 10);
-  if (!Number.isInteger(numeric) || numeric <= 0) {
-    throw new CliError("--max-price must be a positive integer", ExitCode.InvalidInput);
+function normalizePrice(value: string, flagName: "--min-price" | "--max-price"): number {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new CliError(`${flagName} must be a positive integer`, ExitCode.InvalidInput);
   }
+
+  const numeric = Number.parseInt(trimmed, 10);
+  if (!Number.isInteger(numeric) || numeric <= 0) {
+    throw new CliError(`${flagName} must be a positive integer`, ExitCode.InvalidInput);
+  }
+
   return numeric;
 }
 

@@ -98,6 +98,8 @@ describe("parseCliArgs", () => {
       "2099-04-10",
       "--check-out",
       "2099-04-12",
+      "--min-price",
+      "200",
       "--max-price",
       "350",
       "--rating",
@@ -115,9 +117,31 @@ describe("parseCliArgs", () => {
       childrenAges: undefined,
       freeCancellation: undefined,
       hotelClasses: undefined,
+      minPrice: 200,
       maxPrice: 350,
       minRating: 4.5,
     });
+  });
+
+  test("accepts equal hotel min and max price bounds", () => {
+    const parsed = parseCliArgs([
+      "hotels",
+      "--where",
+      "Osaka",
+      "--check-in",
+      "2099-04-10",
+      "--check-out",
+      "2099-04-12",
+      "--min-price",
+      "300",
+      "--max-price",
+      "300",
+    ]);
+
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("hotels");
+    expect(parsed.query.minPrice).toBe(300);
+    expect(parsed.query.maxPrice).toBe(300);
   });
 
   test("parses hotels args with family and class filters", () => {
@@ -151,6 +175,7 @@ describe("parseCliArgs", () => {
       childrenAges: [7, 4],
       freeCancellation: true,
       hotelClasses: [4, 5],
+      minPrice: undefined,
       maxPrice: undefined,
       minRating: undefined,
     });
@@ -292,6 +317,55 @@ describe("parseCliArgs", () => {
         "4.2",
       ]),
     ).toThrow("--rating must be one of: 3.5, 4, 4.5, 5");
+  });
+
+  test("rejects invalid hotel min price", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--min-price",
+        "0",
+      ]),
+    ).toThrow("--min-price must be a positive integer");
+  });
+
+  test("rejects missing value for hotel min price", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--min-price",
+      ]),
+    ).toThrow("Missing value for --min-price");
+  });
+
+  test("rejects hotel min price greater than max price", () => {
+    expect(() =>
+      parseCliArgs([
+        "hotels",
+        "--where",
+        "Seattle",
+        "--check-in",
+        "2099-03-20",
+        "--check-out",
+        "2099-03-22",
+        "--min-price",
+        "400",
+        "--max-price",
+        "300",
+      ]),
+    ).toThrow("--min-price cannot be greater than --max-price");
   });
 
   test("rejects invalid children count", () => {
