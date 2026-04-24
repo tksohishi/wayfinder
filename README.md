@@ -70,6 +70,12 @@ Search with filters:
 wayfinder flights --from LAX --to SEA --date 2026-04-10 --airline AS --max-stops 0 --max-price 250 --depart-after 06:00 --depart-before 12:00
 ```
 
+Search by cabin:
+
+```bash
+wayfinder flights --from JFK --to HND --date 2026-06-15 --cabin premium-economy
+```
+
 Exclude basic economy fares:
 
 ```bash

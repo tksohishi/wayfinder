@@ -16,12 +16,14 @@ describe("shapeSerpApiResponse", () => {
           flights: [
             {
               airline: "Delta",
+              travel_class: "Premium economy",
               duration: 180,
               departure_airport: { time: "2026-05-01 07:10" },
               arrival_airport: { time: "2026-05-01 10:10" },
             },
             {
               airline: "Delta",
+              travel_class: "Premium economy",
               duration: 200,
               departure_airport: { time: "2026-05-01 11:30" },
               arrival_airport: { time: "2026-05-01 14:30" },
@@ -58,6 +60,7 @@ describe("shapeSerpApiResponse", () => {
       arrivalTime: "2026-05-01 14:30",
       durationMinutes: 380,
       stops: 1,
+      cabin: "Premium economy",
     });
     expect(shaped[1]).toEqual({
       price: 199,

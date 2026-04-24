@@ -13,6 +13,8 @@ describe("parseCliArgs", () => {
       "2099-03-20",
       "--airline",
       "ua",
+      "--cabin",
+      "economy",
       "--max-stops",
       "1",
       "--max-price",
@@ -33,6 +35,7 @@ describe("parseCliArgs", () => {
       destination: "JFK",
       departureDate: "2099-03-20",
       airlineCode: "UA",
+      cabin: "economy",
       maxStops: 1,
       maxPrice: 400,
       departureAfterMinutes: 390,
@@ -59,6 +62,24 @@ describe("parseCliArgs", () => {
     expect(parsed.query.destination).toBe("SEA");
   });
 
+  test("parses preeco as premium economy cabin", () => {
+    const parsed = parseCliArgs([
+      "flights",
+      "--from",
+      "SFO",
+      "--to",
+      "JFK",
+      "--date",
+      "2099-03-20",
+      "--cabin",
+      "preeco",
+    ]);
+
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("flights");
+    expect(parsed.query.cabin).toBe("premium-economy");
+  });
+
   test("parses repeated flight dates as multi-date query", () => {
     const parsed = parseCliArgs([
       "flights",
@@ -81,6 +102,7 @@ describe("parseCliArgs", () => {
       destination: "JFK",
       departureDates: ["2099-03-20", "2099-03-21"],
       airlineCode: undefined,
+      cabin: undefined,
       maxStops: undefined,
       maxPrice: undefined,
       departureAfterMinutes: undefined,
@@ -291,6 +313,39 @@ describe("parseCliArgs", () => {
         "09:00",
       ]),
     ).toThrow("Departure window requires both --depart-after and --depart-before");
+  });
+
+  test("rejects ambiguous flight cabin", () => {
+    expect(() =>
+      parseCliArgs([
+        "flights",
+        "--from",
+        "SFO",
+        "--to",
+        "JFK",
+        "--date",
+        "2099-03-20",
+        "--cabin",
+        "premium",
+      ]),
+    ).toThrow("--cabin must be one of: economy, premium-economy, preeco, business, first");
+  });
+
+  test("rejects exclude basic with non-economy cabin", () => {
+    expect(() =>
+      parseCliArgs([
+        "flights",
+        "--from",
+        "SFO",
+        "--to",
+        "JFK",
+        "--date",
+        "2099-03-20",
+        "--cabin",
+        "business",
+        "--exclude-basic",
+      ]),
+    ).toThrow("--exclude-basic can only be used with --cabin economy");
   });
 
   test("rejects command without subcommand", () => {

@@ -43,6 +43,7 @@ Flights required:
 
 Flights optional filters:
   --airline <IATA>          Airline code, example UA
+  --cabin <CABIN>           Cabin: economy, premium-economy, preeco, business, first
   --max-stops <0|1|2>       Maximum number of stops
   --max-price <USD>         Max price in USD
   --depart-after <HH:MM>    Start of departure window

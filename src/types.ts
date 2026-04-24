@@ -9,11 +9,14 @@ export const ExitCode = {
 
 export type ExitCodeValue = (typeof ExitCode)[keyof typeof ExitCode];
 
+export type CabinClass = "economy" | "premium-economy" | "business" | "first";
+
 export interface FlightQuery {
   origin: string;
   destination: string;
   departureDate: string;
   airlineCode?: string;
+  cabin?: CabinClass;
   maxStops?: number;
   maxPrice?: number;
   departureAfterMinutes?: number;
@@ -26,6 +29,7 @@ export interface FlightMultiDateQuery {
   destination: string;
   departureDates: string[];
   airlineCode?: string;
+  cabin?: CabinClass;
   maxStops?: number;
   maxPrice?: number;
   departureAfterMinutes?: number;
@@ -123,6 +127,7 @@ export interface FlightOption {
   arrivalTime: string;
   durationMinutes: number;
   stops: number;
+  cabin?: string;
   bookingToken?: string;
 }
 

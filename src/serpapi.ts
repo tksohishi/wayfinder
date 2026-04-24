@@ -1,5 +1,6 @@
 import { CliError } from "./errors";
 import {
+  CabinClass,
   ExitCode,
   FlightDateResult,
   FlightBookingQuery,
@@ -22,6 +23,7 @@ interface SerpApiAirport {
 
 interface SerpApiSegment {
   airline?: string;
+  travel_class?: string;
   duration?: number;
   departure_airport?: SerpApiAirport;
   arrival_airport?: SerpApiAirport;
@@ -148,6 +150,7 @@ export async function searchFlightsMultiDate(
       destination: query.destination,
       departureDate: date,
       airlineCode: query.airlineCode,
+      cabin: query.cabin,
       maxStops: query.maxStops,
       maxPrice: query.maxPrice,
       departureAfterMinutes: query.departureAfterMinutes,
@@ -291,6 +294,9 @@ function shapeItinerary(itinerary: SerpApiItinerary): FlightOption | null {
   }
 
   const uniqueAirlines = [...new Set(segments.map((segment) => segment.airline).filter(Boolean))];
+  const cabinClasses = [
+    ...new Set(segments.map((segment) => segment.travel_class).filter(isNonEmptyString)),
+  ];
 
   const option: FlightOption = {
     price: itinerary.price as number,
@@ -300,6 +306,10 @@ function shapeItinerary(itinerary: SerpApiItinerary): FlightOption | null {
     durationMinutes: inferDurationMinutes(itinerary, segments),
     stops: Math.max(0, segments.length - 1),
   };
+
+  if (cabinClasses.length > 0) {
+    option.cabin = cabinClasses.join(", ");
+  }
 
   if (typeof itinerary.booking_token === "string" && itinerary.booking_token.trim() !== "") {
     option.bookingToken = itinerary.booking_token.trim();
@@ -351,6 +361,10 @@ function inferDurationMinutes(itinerary: SerpApiItinerary, segments: SerpApiSegm
   return segmentDuration;
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim() !== "";
+}
+
 function buildFlightRequestUrl(query: FlightQuery, apiKey: string): string {
   const url = new URL("https://serpapi.com/search.json");
 
@@ -365,6 +379,10 @@ function buildFlightRequestUrl(query: FlightQuery, apiKey: string): string {
 
   if (query.airlineCode) {
     url.searchParams.set("include_airlines", query.airlineCode);
+  }
+
+  if (query.cabin) {
+    url.searchParams.set("travel_class", toSerpApiTravelClass(query.cabin));
   }
 
   if (typeof query.maxStops === "number") {
@@ -390,7 +408,7 @@ function buildFlightRequestUrl(query: FlightQuery, apiKey: string): string {
 
   if (query.excludeBasic) {
     url.searchParams.set("exclude_basic", "true");
-    url.searchParams.set("travel_class", "1");
+    url.searchParams.set("travel_class", toSerpApiTravelClass("economy"));
     url.searchParams.set("gl", "us");
   }
 
@@ -477,6 +495,22 @@ function toSerpApiStopsFilter(maxStops: number): string {
   }
 
   return "3";
+}
+
+function toSerpApiTravelClass(cabin: CabinClass): string {
+  if (cabin === "economy") {
+    return "1";
+  }
+
+  if (cabin === "premium-economy") {
+    return "2";
+  }
+
+  if (cabin === "business") {
+    return "3";
+  }
+
+  return "4";
 }
 
 function toSerpApiRating(rating: 3.5 | 4 | 4.5 | 5): string {

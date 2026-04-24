@@ -97,6 +97,76 @@ describe("runWayfinder", () => {
     expect(payload.results[1]?.bookingToken).toBe("token-2");
   });
 
+  test("runs flight search with cabin filter", async () => {
+    let requestedUrl = "";
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const fetchImpl: typeof fetch = async (input) => {
+      requestedUrl = String(input);
+
+      return new Response(
+        JSON.stringify({
+          best_flights: [
+            {
+              price: 1400,
+              flights: [
+                {
+                  airline: "ANA",
+                  travel_class: "Premium economy",
+                  duration: 840,
+                  departure_airport: { time: "2099-06-15 13:50" },
+                  arrival_airport: { time: "2099-06-16 17:00" },
+                },
+              ],
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      );
+    };
+
+    const code = await runWayfinder(
+      [
+        "flights",
+        "--from",
+        "JFK",
+        "--to",
+        "HND",
+        "--date",
+        "2099-06-15",
+        "--cabin",
+        "premium-economy",
+        "--json",
+      ],
+      {
+        env: { SERPAPI_API_KEY: "test-key" },
+        fetchImpl,
+        output: {
+          stdout: (value: string) => stdout.push(value),
+          stderr: (value: string) => stderr.push(value),
+        },
+      },
+    );
+
+    expect(code).toBe(ExitCode.Success);
+    expect(stderr).toHaveLength(0);
+    expect(requestedUrl).toContain("travel_class=2");
+
+    const payload = JSON.parse(stdout[0] as string) as {
+      query: { cabin?: string };
+      results: Array<{ cabin?: string }>;
+    };
+
+    expect(payload.query.cabin).toBe("premium-economy");
+    expect(payload.results[0]?.cabin).toBe("Premium economy");
+  });
+
   test("fetches booking links for multiple tokens", async () => {
     const urls: string[] = [];
     const stdout: string[] = [];

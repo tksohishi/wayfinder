@@ -14,6 +14,7 @@ export function renderFlightTable(options: FlightOption[]): string {
     arrive: option.arrivalTime,
     duration: formatDuration(option.durationMinutes),
     stops: String(option.stops),
+    cabin: option.cabin ?? "n/a",
   }));
 
   const headers = {
@@ -23,6 +24,7 @@ export function renderFlightTable(options: FlightOption[]): string {
     arrive: "ARRIVE",
     duration: "DURATION",
     stops: "STOPS",
+    cabin: "CABIN",
   };
 
   const widths = {
@@ -32,6 +34,7 @@ export function renderFlightTable(options: FlightOption[]): string {
     arrive: maxWidth(rows, "arrive", headers.arrive),
     duration: maxWidth(rows, "duration", headers.duration),
     stops: maxWidth(rows, "stops", headers.stops),
+    cabin: maxWidth(rows, "cabin", headers.cabin),
   };
 
   const lines: string[] = [];
@@ -44,6 +47,7 @@ export function renderFlightTable(options: FlightOption[]): string {
       headers.arrive.padEnd(widths.arrive),
       headers.duration.padEnd(widths.duration),
       headers.stops.padEnd(widths.stops),
+      headers.cabin.padEnd(widths.cabin),
     ].join("  "),
   );
 
@@ -55,6 +59,7 @@ export function renderFlightTable(options: FlightOption[]): string {
       "-".repeat(widths.arrive),
       "-".repeat(widths.duration),
       "-".repeat(widths.stops),
+      "-".repeat(widths.cabin),
     ].join("  "),
   );
 
@@ -67,6 +72,7 @@ export function renderFlightTable(options: FlightOption[]): string {
         row.arrive.padEnd(widths.arrive),
         row.duration.padEnd(widths.duration),
         row.stops.padEnd(widths.stops),
+        row.cabin.padEnd(widths.cabin),
       ].join("  "),
     );
   }

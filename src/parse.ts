@@ -2,6 +2,7 @@ import { CliError } from "./errors";
 import {
   ExitCode,
   FlightBookingQuery,
+  CabinClass,
   FlightsQuery,
   HotelClass,
   HotelQuery,
@@ -16,6 +17,7 @@ interface FlightRawOptions {
   to?: string;
   dates: string[];
   airline?: string;
+  cabin?: string;
   maxStops?: string;
   maxPrice?: string;
   departAfter?: string;
@@ -139,6 +141,9 @@ function parseFlightsArgs(args: string[]): ParsedArgs {
         break;
       case "--airline":
         raw.airline = value;
+        break;
+      case "--cabin":
+        raw.cabin = value;
         break;
       case "--max-stops":
         raw.maxStops = value;
@@ -428,8 +433,13 @@ function buildFlightQuery(raw: FlightRawOptions): FlightsQuery {
   }
 
   const airlineCode = raw.airline ? normalizeAirlineCode(raw.airline) : undefined;
+  const cabin = raw.cabin ? normalizeCabin(raw.cabin) : undefined;
   const maxStops = raw.maxStops ? normalizeMaxStops(raw.maxStops) : undefined;
   const maxPrice = raw.maxPrice ? normalizePrice(raw.maxPrice, "--max-price") : undefined;
+
+  if (raw.excludeBasic && cabin && cabin !== "economy") {
+    throw new CliError("--exclude-basic can only be used with --cabin economy", ExitCode.InvalidInput);
+  }
 
   const hasDepartAfter = typeof raw.departAfter === "string";
   const hasDepartBefore = typeof raw.departBefore === "string";
@@ -460,6 +470,7 @@ function buildFlightQuery(raw: FlightRawOptions): FlightsQuery {
     origin,
     destination,
     airlineCode,
+    cabin,
     maxStops,
     maxPrice,
     departureAfterMinutes,
@@ -637,6 +648,27 @@ function normalizeAirlineCode(value: string): string {
     );
   }
   return upper;
+}
+
+function normalizeCabin(value: string): CabinClass {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "preeco") {
+    return "premium-economy";
+  }
+
+  if (
+    normalized === "economy" ||
+    normalized === "premium-economy" ||
+    normalized === "business" ||
+    normalized === "first"
+  ) {
+    return normalized;
+  }
+
+  throw new CliError(
+    "--cabin must be one of: economy, premium-economy, preeco, business, first",
+    ExitCode.InvalidInput,
+  );
 }
 
 function normalizeLocation(value: string): string {
