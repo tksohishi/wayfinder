@@ -72,6 +72,72 @@ describe("shapeSerpApiResponse", () => {
     });
   });
 
+  test("passes eastbound arrival time and duration through verbatim (no tz math)", () => {
+    // PSP -> SLC -> JFK. Airport-local times; 06:00 PT + 528m = 17:48 ET.
+    const payload = {
+      best_flights: [
+        {
+          price: 344,
+          total_duration: 528,
+          flights: [
+            {
+              airline: "Delta",
+              duration: 110,
+              departure_airport: { time: "2026-09-07 06:00" },
+              arrival_airport: { time: "2026-09-07 08:50" },
+            },
+            {
+              airline: "Delta",
+              duration: 318,
+              departure_airport: { time: "2026-09-07 10:30" },
+              arrival_airport: { time: "2026-09-07 17:48" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const shaped = shapeSerpApiResponse(payload);
+
+    expect(shaped).toHaveLength(1);
+    expect(shaped[0]?.departureTime).toBe("2026-09-07 06:00");
+    expect(shaped[0]?.arrivalTime).toBe("2026-09-07 17:48");
+    expect(shaped[0]?.durationMinutes).toBe(528);
+  });
+
+  test("passes westbound arrival time and duration through verbatim (no tz math)", () => {
+    // JFK -> DFW -> PSP. Airport-local times; 06:54 ET + 479m = 11:53 PT.
+    const payload = {
+      best_flights: [
+        {
+          price: 297,
+          total_duration: 479,
+          flights: [
+            {
+              airline: "American",
+              duration: 245,
+              departure_airport: { time: "2026-09-04 06:54" },
+              arrival_airport: { time: "2026-09-04 09:59" },
+            },
+            {
+              airline: "American",
+              duration: 180,
+              departure_airport: { time: "2026-09-04 10:53" },
+              arrival_airport: { time: "2026-09-04 11:53" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const shaped = shapeSerpApiResponse(payload);
+
+    expect(shaped).toHaveLength(1);
+    expect(shaped[0]?.departureTime).toBe("2026-09-04 06:54");
+    expect(shaped[0]?.arrivalTime).toBe("2026-09-04 11:53");
+    expect(shaped[0]?.durationMinutes).toBe(479);
+  });
+
   test("filters by departure window", () => {
     const options = [
       {
