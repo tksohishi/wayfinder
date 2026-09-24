@@ -135,7 +135,8 @@ export async function searchFlights(
   flights.sort(compareByDepartureTime);
   return {
     options: flights,
-    googleFlightsUrl: payload.search_metadata?.google_flights_url,
+    // Round trip: SerpApi's URL is not verified to encode the return date, so omit it.
+    googleFlightsUrl: query.returnDate ? undefined : payload.search_metadata?.google_flights_url,
   };
 }
 
@@ -369,10 +370,13 @@ function buildFlightRequestUrl(query: FlightQuery, apiKey: string): string {
   const url = new URL("https://serpapi.com/search.json");
 
   url.searchParams.set("engine", "google_flights");
-  url.searchParams.set("type", "2");
+  url.searchParams.set("type", query.returnDate ? "1" : "2");
   url.searchParams.set("departure_id", query.origin);
   url.searchParams.set("arrival_id", query.destination);
   url.searchParams.set("outbound_date", query.departureDate);
+  if (query.returnDate) {
+    url.searchParams.set("return_date", query.returnDate);
+  }
   url.searchParams.set("sort_by", "2");
   url.searchParams.set("currency", "USD");
   url.searchParams.set("api_key", apiKey);

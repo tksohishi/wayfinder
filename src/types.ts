@@ -15,6 +15,8 @@ export interface FlightQuery {
   origin: string;
   destination: string;
   departureDate: string;
+  returnDate?: string;
+  tripType?: "round-trip";
   airlineCode?: string;
   cabin?: CabinClass;
   maxStops?: number;

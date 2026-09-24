@@ -26,9 +26,9 @@ const HELP_TEXT = `wayfinder travel search
 
 Usage:
   wayfinder setup [--reset]
-  wayfinder flights --from SFO --to JFK --date 2026-03-21 [filters]
-  wayfinder flights one-way --from SFO --to JFK --date 2026-03-21 [filters]
-  wayfinder flights booking --from SFO --to JFK --date 2026-03-21 --token <BOOKING_TOKEN> [--token <BOOKING_TOKEN>] [--json]
+  wayfinder flights --from SFO --to JFK --depart 2026-03-21 [--return 2026-03-28] [filters]
+  wayfinder flights one-way --from SFO --to JFK --depart 2026-03-21 [filters]
+  wayfinder flights booking --from SFO --to JFK --depart 2026-03-21 --token <BOOKING_TOKEN> [--token <BOOKING_TOKEN>] [--json]
   wayfinder hotels --where "New York, NY" --check-in 2026-03-21 --check-out 2026-03-23 [filters]
   wayfinder places --near "Shinjuku, Tokyo" [--type restaurant|coffee] [--range walk] [--limit N] [--json]
 
@@ -39,21 +39,23 @@ Setup:
 Flights required:
   --from <IATA>             Origin airport code
   --to <IATA>               Destination airport code
-  --date <YYYY-MM-DD>       Departure date (repeat up to 3 unique dates)
+  --depart <YYYY-MM-DD>     Departure date (repeat up to 3 unique dates; --date is an alias)
 
 Flights optional filters:
+  --return <YYYY-MM-DD>     Return date for a round trip (single --depart only; prices are round-trip totals)
   --airline <IATA>          Airline code, example UA
   --cabin <CABIN>           Cabin: economy, premium-economy, preeco, business, first
   --max-stops <0|1|2>       Maximum number of stops
   --max-price <USD>         Max price in USD
   --depart-after <HH:MM>    Start of departure window
   --depart-before <HH:MM>   End of departure window
-  --exclude-basic           Exclude basic economy fares
+  --exclude-basic           Exclude basic economy fares; US domestic economy only (SerpApi limitation),
+                            no effect on international routes
 
 Flights booking required:
   --from <IATA>             Origin airport code
   --to <IATA>               Destination airport code
-  --date <YYYY-MM-DD>       Departure date
+  --depart <YYYY-MM-DD>     Departure date (--date is an alias)
   --token <BOOKING_TOKEN>   Booking token from a flights search result
   (repeat --token to request multiple options)
 
@@ -181,6 +183,13 @@ export async function runWayfinder(
               null,
               2,
             ),
+          );
+        } else if (parsed.query.returnDate) {
+          output.stdout(
+            [
+              `ROUND TRIP: return ${parsed.query.returnDate} (prices are round-trip totals; return legs not shown)`,
+              renderFlightTable(flights.options, "PRICE (ROUND TRIP)"),
+            ].join("\n"),
           );
         } else {
           output.stdout(renderFlightTable(flights.options));
@@ -346,7 +355,7 @@ async function runSetupFlow(
   output.stdout("");
   output.stdout(`Setup complete. Saved key to ${configPath}.`);
   output.stdout("Next step: wayfinder --help");
-  output.stdout("Quick start: wayfinder flights --from SFO --to JFK --date 2026-04-10");
+  output.stdout("Quick start: wayfinder flights --from SFO --to JFK --depart 2026-04-10");
 
   return ExitCode.Success;
 }

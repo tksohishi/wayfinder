@@ -52,46 +52,52 @@ Or store it in `~/.config/wayfinder/config.json`:
 
 ## Usage examples
 
-Search one way flights:
+Search one way flights (`--date` is accepted as an alias for `--depart`):
 
 ```bash
-wayfinder flights --from SFO --to JFK --date 2026-04-10
+wayfinder flights --from SFO --to JFK --depart 2026-04-10
+```
+
+Search a round trip (prices are round-trip totals; return legs are not listed):
+
+```bash
+wayfinder flights --from SFO --to JFK --depart 2026-04-10 --return 2026-04-17
 ```
 
 Search up to 3 departure dates in one command:
 
 ```bash
-wayfinder flights --from SFO --to JFK --date 2026-04-10 --date 2026-04-11 --date 2026-04-13
+wayfinder flights --from SFO --to JFK --depart 2026-04-10 --depart 2026-04-11 --depart 2026-04-13
 ```
 
 Search with filters:
 
 ```bash
-wayfinder flights --from LAX --to SEA --date 2026-04-10 --airline AS --max-stops 0 --max-price 250 --depart-after 06:00 --depart-before 12:00
+wayfinder flights --from LAX --to SEA --depart 2026-04-10 --airline AS --max-stops 0 --max-price 250 --depart-after 06:00 --depart-before 12:00
 ```
 
 Search by cabin:
 
 ```bash
-wayfinder flights --from JFK --to HND --date 2026-06-15 --cabin premium-economy
+wayfinder flights --from JFK --to HND --depart 2026-06-15 --cabin premium-economy
 ```
 
-Exclude basic economy fares:
+Exclude basic economy fares (US domestic economy only, a SerpApi limitation; no effect on international routes):
 
 ```bash
-wayfinder flights --from SFO --to JFK --date 2026-04-10 --exclude-basic
+wayfinder flights --from SFO --to JFK --depart 2026-04-10 --exclude-basic
 ```
 
 Structured output for scripting:
 
 ```bash
-wayfinder flights --from SFO --to JFK --date 2026-04-10 --json | jq '.results[] | {price,airline,stops}'
+wayfinder flights --from SFO --to JFK --depart 2026-04-10 --json | jq '.results[] | {price,airline,stops}'
 ```
 
 Get booking links from selected flight tokens:
 
 ```bash
-wayfinder flights booking --from LAS --to JFK --date 2026-05-29 --token "<TOKEN_1>" --token "<TOKEN_2>" --json
+wayfinder flights booking --from LAS --to JFK --depart 2026-05-29 --token "<TOKEN_1>" --token "<TOKEN_2>" --json
 ```
 
 Search hotels:

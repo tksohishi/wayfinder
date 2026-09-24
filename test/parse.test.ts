@@ -9,7 +9,7 @@ describe("parseCliArgs", () => {
       "sfo",
       "--to",
       "jfk",
-      "--date",
+      "--depart",
       "2099-03-20",
       "--airline",
       "ua",
@@ -52,7 +52,7 @@ describe("parseCliArgs", () => {
       "LAX",
       "--to",
       "SEA",
-      "--date",
+      "--depart",
       "2099-01-10",
     ]);
 
@@ -69,7 +69,7 @@ describe("parseCliArgs", () => {
       "SFO",
       "--to",
       "JFK",
-      "--date",
+      "--depart",
       "2099-03-20",
       "--cabin",
       "preeco",
@@ -87,11 +87,11 @@ describe("parseCliArgs", () => {
       "SFO",
       "--to",
       "JFK",
-      "--date",
+      "--depart",
       "2099-03-20",
-      "--date",
+      "--depart",
       "2099-03-21",
-      "--date",
+      "--depart",
       "2099-03-20",
     ]);
 
@@ -211,7 +211,7 @@ describe("parseCliArgs", () => {
       "LAS",
       "--to",
       "JFK",
-      "--date",
+      "--depart",
       "2099-05-29",
       "--token",
       "abc",
@@ -295,7 +295,7 @@ describe("parseCliArgs", () => {
 
   test("rejects invalid airport code", () => {
     expect(() =>
-      parseCliArgs(["flights", "--from", "SF", "--to", "JFK", "--date", "2099-03-20"]),
+      parseCliArgs(["flights", "--from", "SF", "--to", "JFK", "--depart", "2099-03-20"]),
     ).toThrow("Invalid origin airport code");
   });
 
@@ -307,7 +307,7 @@ describe("parseCliArgs", () => {
         "SFO",
         "--to",
         "JFK",
-        "--date",
+        "--depart",
         "2099-03-20",
         "--depart-after",
         "09:00",
@@ -323,7 +323,7 @@ describe("parseCliArgs", () => {
         "SFO",
         "--to",
         "JFK",
-        "--date",
+        "--depart",
         "2099-03-20",
         "--cabin",
         "premium",
@@ -339,7 +339,7 @@ describe("parseCliArgs", () => {
         "SFO",
         "--to",
         "JFK",
-        "--date",
+        "--depart",
         "2099-03-20",
         "--cabin",
         "business",
@@ -349,7 +349,7 @@ describe("parseCliArgs", () => {
   });
 
   test("rejects command without subcommand", () => {
-    expect(() => parseCliArgs(["--from", "SFO", "--to", "JFK", "--date", "2099-03-20"])).toThrow(
+    expect(() => parseCliArgs(["--from", "SFO", "--to", "JFK", "--depart", "2099-03-20"])).toThrow(
       "Missing subcommand: use `setup`, `flights`, `hotels`, or `places`",
     );
   });
@@ -586,7 +586,7 @@ describe("parseCliArgs", () => {
 
   test("requires token for flights booking", () => {
     expect(() => parseCliArgs(["flights", "booking"])).toThrow(
-      "Missing required flags: --from, --to, --date",
+      "Missing required flags: --from, --to, --depart",
     );
   });
 
@@ -598,16 +598,16 @@ describe("parseCliArgs", () => {
         "SFO",
         "--to",
         "JFK",
-        "--date",
+        "--depart",
         "2099-03-20",
-        "--date",
+        "--depart",
         "2099-03-21",
-        "--date",
+        "--depart",
         "2099-03-22",
-        "--date",
+        "--depart",
         "2099-03-23",
       ]),
-    ).toThrow("Too many dates: maximum 3 unique --date values per search");
+    ).toThrow("Too many dates: maximum 3 unique --depart values per search");
   });
 
   test("rejects places command without near flag", () => {
@@ -630,5 +630,14 @@ describe("parseCliArgs", () => {
     expect(() => parseCliArgs(["places", "--near", "Tokyo", "--range", "drive"])).toThrow(
       "--range must be: walk",
     );
+  });
+});
+
+describe("--date alias", () => {
+  test("accepts --date as an alias for --depart", () => {
+    const parsed = parseCliArgs(["flights", "--from", "SFO", "--to", "JFK", "--date", "2099-01-10"]);
+    expect(parsed.help).toBeFalse();
+    expect(parsed.mode).toBe("flights");
+    expect(parsed.query.departureDate).toBe("2099-01-10");
   });
 });

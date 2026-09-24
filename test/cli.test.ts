@@ -62,7 +62,7 @@ describe("runWayfinder", () => {
         "SFO",
         "--to",
         "JFK",
-        "--date",
+        "--depart",
         "2099-03-20",
         "--exclude-basic",
         "--json",
@@ -138,7 +138,7 @@ describe("runWayfinder", () => {
         "JFK",
         "--to",
         "HND",
-        "--date",
+        "--depart",
         "2099-06-15",
         "--cabin",
         "premium-economy",
@@ -225,7 +225,7 @@ describe("runWayfinder", () => {
         "LAS",
         "--to",
         "JFK",
-        "--date",
+        "--depart",
         "2099-05-29",
         "--token",
         "abc",
@@ -315,11 +315,11 @@ describe("runWayfinder", () => {
         "SFO",
         "--to",
         "JFK",
-        "--date",
+        "--depart",
         "2099-03-20",
-        "--date",
+        "--depart",
         "2099-03-21",
-        "--date",
+        "--depart",
         "2099-03-20",
         "--json",
       ],
@@ -368,13 +368,13 @@ describe("runWayfinder", () => {
         "SFO",
         "--to",
         "JFK",
-        "--date",
+        "--depart",
         "2099-03-20",
-        "--date",
+        "--depart",
         "2099-03-21",
-        "--date",
+        "--depart",
         "2099-03-22",
-        "--date",
+        "--depart",
         "2099-03-23",
       ],
       {
@@ -390,7 +390,7 @@ describe("runWayfinder", () => {
     expect(code).toBe(ExitCode.InvalidInput);
     expect(fetchCalled).toBeFalse();
     expect(stdout).toHaveLength(0);
-    expect(stderr[0]).toBe("Too many dates: maximum 3 unique --date values per search");
+    expect(stderr[0]).toBe("Too many dates: maximum 3 unique --depart values per search");
   });
 
   test("runs hotel search with json output", async () => {
@@ -823,5 +823,158 @@ describe("runWayfinder", () => {
     expect(saved.serpApiKey).toBe("new-key");
     expect(stdout.join("\n")).toContain("Existing config removed due to --reset.");
     expect(stdout.join("\n")).toContain("Setup complete");
+  });
+});
+
+describe("round-trip flights", () => {
+  const flightsResponse = () =>
+    new Response(
+      JSON.stringify({
+        search_metadata: {
+          google_flights_url: "https://www.google.com/travel/flights/search?tfs=test",
+        },
+        best_flights: [
+          {
+            price: 640,
+            booking_token: "token-rt",
+            flights: [
+              {
+                airline: "United",
+                duration: 330,
+                departure_airport: { time: "2099-03-20 07:00" },
+                arrival_airport: { time: "2099-03-20 12:30" },
+              },
+            ],
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+
+  const run = async (argv: string[]) => {
+    const requestedUrls: string[] = [];
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      requestedUrls.push(String(input));
+      return flightsResponse();
+    };
+    const code = await runWayfinder(argv, {
+      env: { SERPAPI_API_KEY: "test-key" },
+      fetchImpl,
+      output: {
+        stdout: (value: string) => stdout.push(value),
+        stderr: (value: string) => stderr.push(value),
+      },
+    });
+    return { code, requestedUrls, stdout, stderr };
+  };
+
+  test("sends type=1 and return_date and marks the result as round-trip", async () => {
+    const { code, requestedUrls, stdout } = await run([
+      "flights", "--from", "SFO", "--to", "JFK", "--depart", "2099-03-20", "--return", "2099-03-27", "--json",
+    ]);
+
+    expect(code).toBe(ExitCode.Success);
+    expect(requestedUrls).toHaveLength(1);
+    const params = new URL(requestedUrls[0] as string).searchParams;
+    expect(params.get("type")).toBe("1");
+    expect(params.get("outbound_date")).toBe("2099-03-20");
+    expect(params.get("return_date")).toBe("2099-03-27");
+
+    const payload = JSON.parse(stdout.join(""));
+    expect(payload.query.tripType).toBe("round-trip");
+    expect(payload.query.returnDate).toBe("2099-03-27");
+    expect(payload.googleFlightsUrl).toBeUndefined();
+    expect(payload.results[0].price).toBe(640);
+  });
+
+  test("labels table prices as round-trip totals", async () => {
+    const { code, stdout } = await run([
+      "flights", "--from", "SFO", "--to", "JFK", "--depart", "2099-03-20", "--return", "2099-03-27",
+    ]);
+
+    expect(code).toBe(ExitCode.Success);
+    expect(stdout.join("")).toContain("ROUND TRIP: return 2099-03-27");
+    expect(stdout.join("")).toContain("PRICE (ROUND TRIP)");
+  });
+
+  test("one-way requests still send type=2 without return_date", async () => {
+    const { code, requestedUrls, stdout } = await run([
+      "flights", "--from", "SFO", "--to", "JFK", "--depart", "2099-03-20", "--json",
+    ]);
+
+    expect(code).toBe(ExitCode.Success);
+    const params = new URL(requestedUrls[0] as string).searchParams;
+    expect(params.get("type")).toBe("2");
+    expect(params.get("return_date")).toBeNull();
+    const payload = JSON.parse(stdout.join(""));
+    expect(payload.query.tripType).toBeUndefined();
+    expect(payload.googleFlightsUrl).toBe("https://www.google.com/travel/flights/search?tfs=test");
+  });
+
+  test("rejects --return with multiple --depart values", async () => {
+    const { code, requestedUrls, stderr } = await run([
+      "flights", "--from", "SFO", "--to", "JFK", "--depart", "2099-03-20", "--depart", "2099-03-21", "--return", "2099-03-27",
+    ]);
+
+    expect(code).toBe(ExitCode.InvalidInput);
+    expect(requestedUrls).toHaveLength(0);
+    expect(stderr.join("")).toContain("--return cannot be combined with multiple --depart values");
+  });
+
+  test("rejects --return with the one-way subcommand", async () => {
+    const { code, requestedUrls, stderr } = await run([
+      "flights", "one-way", "--from", "SFO", "--to", "JFK", "--depart", "2099-03-20", "--return", "2099-03-27",
+    ]);
+
+    expect(code).toBe(ExitCode.InvalidInput);
+    expect(requestedUrls).toHaveLength(0);
+    expect(stderr.join("")).toContain("--return cannot be used with the one-way subcommand");
+  });
+
+  test("allows a same-day return and duplicate identical --depart values", async () => {
+    const sameDay = await run([
+      "flights", "--from", "SFO", "--to", "JFK", "--depart", "2099-03-20", "--return", "2099-03-20", "--json",
+    ]);
+    expect(sameDay.code).toBe(ExitCode.Success);
+    expect(new URL(sameDay.requestedUrls[0] as string).searchParams.get("return_date")).toBe("2099-03-20");
+
+    const duplicate = await run([
+      "flights", "--from", "SFO", "--to", "JFK", "--depart", "2099-03-20", "--depart", "2099-03-20", "--return", "2099-03-27", "--json",
+    ]);
+    expect(duplicate.code).toBe(ExitCode.Success);
+    expect(duplicate.requestedUrls).toHaveLength(1);
+    expect(new URL(duplicate.requestedUrls[0] as string).searchParams.get("type")).toBe("1");
+  });
+
+  test("rejects a return date earlier than the departure date across a month boundary", async () => {
+    const { code, requestedUrls, stderr } = await run([
+      "flights", "--from", "SFO", "--to", "JFK", "--depart", "2099-04-01", "--return", "2099-03-31",
+    ]);
+
+    expect(code).toBe(ExitCode.InvalidInput);
+    expect(requestedUrls).toHaveLength(0);
+    expect(stderr.join("")).toContain("Return date must not be earlier than departure date");
+  });
+
+  test("rejects a malformed return date", async () => {
+    const { code, requestedUrls, stderr } = await run([
+      "flights", "--from", "SFO", "--to", "JFK", "--depart", "2099-03-20", "--return", "03/27/2099",
+    ]);
+
+    expect(code).toBe(ExitCode.InvalidInput);
+    expect(requestedUrls).toHaveLength(0);
+    expect(stderr.join("")).toContain("Invalid date");
+  });
+
+  test("rejects a return date earlier than the departure date", async () => {
+    const { code, requestedUrls, stderr } = await run([
+      "flights", "--from", "SFO", "--to", "JFK", "--depart", "2099-03-20", "--return", "2099-03-19",
+    ]);
+
+    expect(code).toBe(ExitCode.InvalidInput);
+    expect(requestedUrls).toHaveLength(0);
+    expect(stderr.join("")).toContain("Return date must not be earlier than departure date");
   });
 });

@@ -6,7 +6,7 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-export function renderFlightTable(options: FlightOption[]): string {
+export function renderFlightTable(options: FlightOption[], priceHeader = "PRICE"): string {
   const rows = options.map((option) => ({
     price: currencyFormatter.format(option.price),
     airline: option.airline,
@@ -18,7 +18,7 @@ export function renderFlightTable(options: FlightOption[]): string {
   }));
 
   const headers = {
-    price: "PRICE",
+    price: priceHeader,
     airline: "AIRLINE",
     depart: "DEPART",
     arrive: "ARRIVE",

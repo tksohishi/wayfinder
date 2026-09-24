@@ -16,6 +16,8 @@ interface FlightRawOptions {
   from?: string;
   to?: string;
   dates: string[];
+  return?: string;
+  oneWay: boolean;
   airline?: string;
   cabin?: string;
   maxStops?: string;
@@ -73,7 +75,7 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
     };
   }
 
-  const { mode, args } = stripSubcommands(argv);
+  const { mode, args, oneWay } = stripSubcommands(argv);
 
   if (mode === "hotels") {
     return parseHotelsArgs(args);
@@ -91,12 +93,13 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
     return parseSetupArgs(args);
   }
 
-  return parseFlightsArgs(args);
+  return parseFlightsArgs(args, oneWay === true);
 }
 
-function parseFlightsArgs(args: string[]): ParsedArgs {
+function parseFlightsArgs(args: string[], oneWay: boolean): ParsedArgs {
   const raw: FlightRawOptions = {
     dates: [],
+    oneWay,
     excludeBasic: false,
     outputJson: false,
     help: false,
@@ -136,8 +139,12 @@ function parseFlightsArgs(args: string[]): ParsedArgs {
       case "--to":
         raw.to = value;
         break;
+      case "--depart":
       case "--date":
         raw.dates.push(value);
+        break;
+      case "--return":
+        raw.return = value;
         break;
       case "--airline":
         raw.airline = value;
@@ -308,6 +315,7 @@ function parseFlightBookingArgs(args: string[]): ParsedArgs {
       case "--to":
         raw.to = value;
         break;
+      case "--depart":
       case "--date":
         raw.date = value;
         break;
@@ -414,7 +422,7 @@ function parseSetupArgs(args: string[]): ParsedArgs {
 
 function buildFlightQuery(raw: FlightRawOptions): FlightsQuery {
   if (!raw.from || !raw.to || raw.dates.length === 0) {
-    throw new CliError("Missing required flags: --from, --to, --date", ExitCode.InvalidInput);
+    throw new CliError("Missing required flags: --from, --to, --depart", ExitCode.InvalidInput);
   }
 
   const origin = normalizeAirport(raw.from, "origin");
@@ -427,9 +435,23 @@ function buildFlightQuery(raw: FlightRawOptions): FlightsQuery {
   const departureDates = [...new Set(raw.dates.map((date) => normalizeDate(date, "departure")))];
   if (departureDates.length > 3) {
     throw new CliError(
-      "Too many dates: maximum 3 unique --date values per search",
+      "Too many dates: maximum 3 unique --depart values per search",
       ExitCode.InvalidInput,
     );
+  }
+
+  let returnDate: string | undefined;
+  if (typeof raw.return === "string") {
+    if (raw.oneWay) {
+      throw new CliError("--return cannot be used with the one-way subcommand", ExitCode.InvalidInput);
+    }
+    if (departureDates.length > 1) {
+      throw new CliError("--return cannot be combined with multiple --depart values", ExitCode.InvalidInput);
+    }
+    returnDate = normalizeDate(raw.return, "return");
+    if (parseDateOnly(returnDate) < parseDateOnly(departureDates[0] as string)) {
+      throw new CliError("Return date must not be earlier than departure date", ExitCode.InvalidInput);
+    }
   }
 
   const airlineCode = raw.airline ? normalizeAirlineCode(raw.airline) : undefined;
@@ -482,6 +504,7 @@ function buildFlightQuery(raw: FlightRawOptions): FlightsQuery {
     return {
       ...shared,
       departureDate: departureDates[0] as string,
+      ...(returnDate ? { returnDate, tripType: "round-trip" as const } : {}),
     };
   }
 
@@ -550,7 +573,7 @@ function buildHotelQuery(raw: HotelRawOptions): HotelQuery {
 
 function buildFlightBookingQuery(raw: FlightBookingRawOptions): FlightBookingQuery {
   if (!raw.from || !raw.to || !raw.date) {
-    throw new CliError("Missing required flags: --from, --to, --date", ExitCode.InvalidInput);
+    throw new CliError("Missing required flags: --from, --to, --depart", ExitCode.InvalidInput);
   }
 
   const origin = normalizeAirport(raw.from, "origin");
@@ -591,7 +614,7 @@ function buildPlaceQuery(raw: PlaceRawOptions): PlaceQuery {
   };
 }
 
-function stripSubcommands(argv: string[]): { mode: SearchMode; args: string[] } {
+function stripSubcommands(argv: string[]): { mode: SearchMode; args: string[]; oneWay?: boolean } {
   const args = [...argv];
   if (args[0] === "hotels") {
     args.shift();
@@ -607,6 +630,7 @@ function stripSubcommands(argv: string[]): { mode: SearchMode; args: string[] } 
 
     if (args[0] === "one-way") {
       args.shift();
+      return { mode: "flights", args, oneWay: true };
     }
 
     return { mode: "flights", args };
@@ -680,7 +704,7 @@ function normalizeLocation(value: string): string {
   return trimmed;
 }
 
-function normalizeDate(value: string, fieldName: "departure" | "check-in" | "check-out"): string {
+function normalizeDate(value: string, fieldName: "departure" | "return" | "check-in" | "check-out"): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) {
     throw new CliError("Invalid date. Expected YYYY-MM-DD", ExitCode.InvalidInput);
