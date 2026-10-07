@@ -58,7 +58,7 @@ Search one way flights (`--date` is accepted as an alias for `--depart`):
 wayfinder flights --from SFO --to JFK --depart 2026-04-10
 ```
 
-Search a round trip (prices are round-trip totals; return legs are not listed):
+Search a round trip (prices are round-trip totals; return legs are not listed, use the `--json` googleFlightsUrl to pick one):
 
 ```bash
 wayfinder flights --from SFO --to JFK --depart 2026-04-10 --return 2026-04-17

@@ -885,7 +885,7 @@ describe("round-trip flights", () => {
     const payload = JSON.parse(stdout.join(""));
     expect(payload.query.tripType).toBe("round-trip");
     expect(payload.query.returnDate).toBe("2099-03-27");
-    expect(payload.googleFlightsUrl).toBeUndefined();
+    expect(payload.googleFlightsUrl).toBe("https://www.google.com/travel/flights/search?tfs=test");
     expect(payload.results[0].price).toBe(640);
   });
 

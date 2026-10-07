@@ -135,8 +135,7 @@ export async function searchFlights(
   flights.sort(compareByDepartureTime);
   return {
     options: flights,
-    // Round trip: SerpApi's URL is not verified to encode the return date, so omit it.
-    googleFlightsUrl: query.returnDate ? undefined : payload.search_metadata?.google_flights_url,
+    googleFlightsUrl: payload.search_metadata?.google_flights_url,
   };
 }
 
